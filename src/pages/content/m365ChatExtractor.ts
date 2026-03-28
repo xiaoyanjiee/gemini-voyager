@@ -13,12 +13,44 @@ const TAG = '[M365 ChatExtractor]';
 // Types
 // ---------------------------------------------------------------------------
 
+/** 文本内容项 */
+interface TextContent {
+  kind: 'text';
+  text: string;
+}
+
+/** 图片内容项 */
+interface ImageContent {
+  kind: 'image';
+  /** src 属性（可能是相对路径、blob URL 或 data URL） */
+  src: string;
+  /** 浏览器实际加载的 URL（经过 srcset 解析后） */
+  currentSrc: string;
+  alt: string;
+  title: string;
+  width: number;
+  height: number;
+  /** 图片原始尺寸（CSS 缩放前） */
+  naturalWidth: number;
+  naturalHeight: number;
+  /** loading 属性（eager / lazy） */
+  loading: string;
+  visible: boolean;
+}
+
+/** 消息中的一段内容（文本或图片） */
+type ContentItem = TextContent | ImageContent;
+
 /** 单条消息的提取结果 */
 interface ChatMessage {
   /** 消息类型：user = 用户发的，assistant = Copilot 回复的 */
   type: 'user' | 'assistant';
-  /** 消息的纯文本内容 */
+  /** 便捷字段：消息的纯文本内容（方便快速查看） */
   text: string;
+  /** 结构化内容数组：文本 + 图片 */
+  content: ContentItem[];
+  /** 消息中包含的图片数量 */
+  imageCount: number;
   /** 消息在对话中的顺序（从 0 开始） */
   index: number;
   /** 这条消息当前是否在屏幕上可见 */
@@ -41,6 +73,8 @@ interface ExtractResult {
   userMessages: number;
   /** Copilot 消息数 */
   assistantMessages: number;
+  /** 所有消息中的图片总数 */
+  totalImages: number;
   /** 消息列表 */
   messages: ChatMessage[];
 }
@@ -89,6 +123,54 @@ function extractMessageText(el: Element): string {
   return text.replace(/\n{3,}/g, '\n\n').replace(/[ \t]+/g, ' ');
 }
 
+/**
+ * 从消息节点中提取所有图片信息。
+ * 跳过小于 20px 的追踪像素和 UI 图标，跳过按钮/工具栏内的图标。
+ */
+function extractImages(el: Element): ImageContent[] {
+  const imgs = el.querySelectorAll('img');
+  const results: ImageContent[] = [];
+  imgs.forEach((img) => {
+    // 跳过追踪像素和小图标（宽高都小于 20px 的）
+    if (img.naturalWidth > 0 && img.naturalWidth < 20 && img.naturalHeight < 20) return;
+    // 跳过 UI 控件内的图标（按钮、工具栏等）
+    const uiParent = img.closest('button, [role="button"], [role="toolbar"]');
+    if (uiParent) return;
+
+    results.push({
+      kind: 'image',
+      src: img.getAttribute('src') || '',
+      currentSrc: img.currentSrc || '',
+      alt: img.alt || '',
+      title: img.title || '',
+      width: img.width,
+      height: img.height,
+      naturalWidth: img.naturalWidth,
+      naturalHeight: img.naturalHeight,
+      loading: img.loading || '',
+      visible: isVisible(img),
+    });
+  });
+  return results;
+}
+
+/**
+ * 从消息节点中提取结构化内容（文本 + 图片）。
+ * 返回便捷文本字段和结构化 content 数组。
+ */
+function extractContent(el: Element): { text: string; content: ContentItem[]; imageCount: number } {
+  const text = extractMessageText(el);
+  const images = extractImages(el);
+
+  const content: ContentItem[] = [];
+  if (text) {
+    content.push({ kind: 'text', text });
+  }
+  content.push(...images);
+
+  return { text, content, imageCount: images.length };
+}
+
 // ---------------------------------------------------------------------------
 // Core extraction
 // ---------------------------------------------------------------------------
@@ -118,9 +200,12 @@ function extractMessages(): ExtractResult {
       const messages: ChatMessage[] = [];
       articleNodes.forEach((node, i) => {
         const className = typeof node.className === 'string' ? node.className : '';
+        const { text, content, imageCount } = extractContent(node);
         messages.push({
           type: className.includes('User') ? 'user' : 'assistant',
-          text: extractMessageText(node),
+          text,
+          content,
+          imageCount,
           index: i,
           visible: isVisible(node),
           className: className.trim().split(/\s+/).slice(0, 5).join(' '),
@@ -133,6 +218,7 @@ function extractMessages(): ExtractResult {
         totalMessages: messages.length,
         userMessages: messages.filter((m) => m.type === 'user').length,
         assistantMessages: messages.filter((m) => m.type === 'assistant').length,
+        totalImages: messages.reduce((sum, m) => sum + m.imageCount, 0),
         messages,
       };
       console.log(`${TAG} Extraction complete (fallback mode):`, result);
@@ -163,9 +249,12 @@ function extractMessages(): ExtractResult {
   // 构建消息数组
   const messages: ChatMessage[] = allTagged.map((item, i) => {
     const className = typeof item.node.className === 'string' ? item.node.className : '';
+    const { text, content, imageCount } = extractContent(item.node);
     return {
       type: item.type,
-      text: extractMessageText(item.node),
+      text,
+      content,
+      imageCount,
       index: i,
       visible: isVisible(item.node),
       className: className.trim().split(/\s+/).slice(0, 5).join(' '),
@@ -173,24 +262,28 @@ function extractMessages(): ExtractResult {
     };
   });
 
+  const totalImages = messages.reduce((sum, m) => sum + m.imageCount, 0);
+
   const result: ExtractResult = {
     timestamp: new Date().toISOString(),
     url: location.href,
     totalMessages: messages.length,
     userMessages: messages.filter((m) => m.type === 'user').length,
     assistantMessages: messages.filter((m) => m.type === 'assistant').length,
+    totalImages,
     messages,
   };
 
   // Console output
   console.log(`${TAG} Extraction complete:`);
-  console.log(`${TAG}   Total: ${result.totalMessages} messages (${result.userMessages} user, ${result.assistantMessages} assistant)`);
+  console.log(`${TAG}   Total: ${result.totalMessages} messages (${result.userMessages} user, ${result.assistantMessages} assistant, ${totalImages} images)`);
   console.table(
     messages.map((m) => ({
       '#': m.index,
       type: m.type,
+      imgs: m.imageCount,
       visible: m.visible,
-      text: m.text.slice(0, 100) + (m.text.length > 100 ? '...' : ''),
+      text: m.text.slice(0, 80) + (m.text.length > 80 ? '...' : ''),
     })),
   );
   console.log(`${TAG} Full result (also saved to window.__gvLastExtractResult):`, result);
