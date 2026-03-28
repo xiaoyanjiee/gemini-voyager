@@ -8,6 +8,9 @@ import { isGeminiEnterpriseEnvironment } from '@/core/utils/gemini';
 import { startFormulaCopy } from '@/features/formulaCopy';
 import { initI18n } from '@/utils/i18n';
 
+import { startM365ChatExtractor } from './m365ChatExtractor';
+import { startM365Diagnostics } from './m365Diagnostics';
+
 import { startChangelog } from './changelog/index';
 import { startChatWidthAdjuster } from './chatWidth/index';
 import { startContextSync } from './contextSync';
@@ -162,6 +165,14 @@ async function initializeFeatures(): Promise<void> {
     if (isEnterprise) {
       console.log('[Gemini Voyager] Gemini Enterprise detected, starting Prompt Manager only');
       promptManagerInstance = await startPromptManager();
+      return;
+    }
+
+    // M365 Copilot: 只运行临时诊断，不启动任何 Gemini 功能
+    if (location.hostname === 'm365.cloud.microsoft') {
+      console.log('[Gemini Voyager] M365 Copilot detected, starting diagnostics + chat extractor');
+      startM365Diagnostics();
+      startM365ChatExtractor();
       return;
     }
 
@@ -405,7 +416,8 @@ function handleVisibilityChange(): void {
       hostname.includes('gemini.google.com') ||
       hostname.includes('business.gemini.google') ||
       hostname.includes('aistudio.google.com') ||
-      hostname.includes('aistudio.google.cn');
+      hostname.includes('aistudio.google.cn') ||
+      hostname.includes('m365.cloud.microsoft');
 
     // Initialize KaTeX configuration early to suppress Unicode warnings
     // This must run before any formulas are rendered on the page
