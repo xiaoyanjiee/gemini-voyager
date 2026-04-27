@@ -1,6 +1,6 @@
 # M365 Copilot 迁移架构基线
 
-最后更新：2026-04-27
+最后更新：2026-04-28
 状态：M365 adapter 活跃基线
 目标站点：`https://m365.cloud.microsoft/*`
 
@@ -16,6 +16,7 @@
 - 2026-04-26 的真实 M365 DOM 证据显示：`20` 个 raw user nodes、`40` 个 raw assistant nodes、`10` 个 article nodes、`10` 条 logical messages。
 - 自动化测试已覆盖：嵌套节点不重复、空 user 过滤、assistant 快照去重、多段 assistant 顺序、正文容器优先、chrome/feedback 清理、兼容 facade、image-only message、小 icon 过滤、fallback article、canonical id 稳定性。
 - Diagnostics 标框已改为优先标记真实 M365 message article，避免 breadcrumb/list 抢占 `msg[]` 标记名额。
+- 2026-04-28 已在 Windows 本地开发环境验证：`npm.cmd` 测试/构建可用，Edge 加载 `L:\project\dist_chrome` 后 M365 页面可显示 diagnostics 标框，并且 `Voyager` isolated world 中存在 `window.__gvExtract()` / `window.__gvExtractCanonical()`。
 
 ## 迁移目标
 
@@ -126,28 +127,24 @@ Wider UI 路线：
 - layout 代码不得读取消息正文，也不得重新扫描消息 DOM。
 - 如确实需要锚点，只使用 canonical source elements。
 
-## 真实浏览器验证流程
+## Windows 本地浏览器验证流程
 
-Edge 不能稳定地从 WSL UNC 路径直接加载 unpacked extension：
-
-```text
-\\wsl.localhost\Ubuntu\home\xiaoyanjie\projects\gemini-voyager\dist_chrome
-```
+当前项目已迁移到 Windows 路径 `L:\project`。M365 浏览器验证默认使用 Windows 本地 `dist_chrome`，不再使用 WSL UNC 路径。
 
 可用流程：
 
-1. 在 WSL 中构建。
-2. 把 `dist_chrome` 复制到 Windows 本地临时目录。
-3. 用 `--load-extension=<windows-local-dist>` 和干净 profile 启动 Edge。
-4. 使用 CDP，在 `Voyager` isolated world 中执行提取入口。
+1. 在 Windows PowerShell 中运行 `npm.cmd run build:chrome`。
+2. 在 Edge 扩展页 `edge://extensions/` 加载或 reload `L:\project\dist_chrome`。
+3. 打开或刷新 `https://m365.cloud.microsoft/chat`。
+4. Diagnostics 标框应显示 `msg[]`、`nav[]`、`editable[]` 等标签。
+5. 使用 CDP 时，选择 `name === "Voyager"` 的 isolated world，再调用 `window.__gvExtract()` 或 `window.__gvExtractCanonical()`。
 
-PowerShell 示例：
+注意：重新 `build:chrome` 后必须在 `edge://extensions/` 对 unpacked extension 点一次 reload。只刷新 M365 页面可能仍使用旧 manifest 中登记的旧 hashed content script 路径，导致 `window.__gvDiagRun` / `window.__gvExtractCanonical` 不存在。
+
+PowerShell 启动示例：
 
 ```powershell
-$src='\\wsl.localhost\Ubuntu\home\xiaoyanjie\projects\gemini-voyager\dist_chrome'
-$dst="$env:TEMP\gemini-voyager-dist-chrome"
-if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
-Copy-Item -Recurse -Force $src $dst
+$dist='L:\project\dist_chrome'
 
 $profile="$env:TEMP\gemini-voyager-m365-profile"
 New-Item -ItemType Directory -Force -Path $profile | Out-Null
@@ -156,8 +153,8 @@ $edge='C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
 $args=@(
   '--remote-debugging-port=9225',
   "--user-data-dir=$profile",
-  "--disable-extensions-except=$dst",
-  "--load-extension=$dst",
+  "--disable-extensions-except=$dist",
+  "--load-extension=$dist",
   '--no-first-run',
   '--no-default-browser-check',
   'https://m365.cloud.microsoft/chat'
@@ -170,10 +167,27 @@ CDP 规则：
 - 枚举 `Runtime.executionContextCreated`。
 - 选择 `name === "Voyager"` 的 context。
 - 在该 context 中调用 `window.__gvExtract()` 或 `window.__gvExtractCanonical()`。
+- 如果只看到 default context，先到 `edge://extensions/` reload 扩展，再刷新 M365 页面。
 
 ## 测试策略
 
-主要命令：
+Windows 主要命令：
+
+```powershell
+npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts
+npm.cmd run typecheck
+npm.cmd exec -- eslint src/pages/content/m365*.ts src/pages/content/m365*.test.ts
+npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md
+npm.cmd run build:chrome
+```
+
+Windows 环境注意事项：
+
+- PowerShell 可能禁止直接运行 `npm.ps1`，统一使用 `npm.cmd`。
+- 首次部署依赖时使用 `npm.cmd install --package-lock=false --legacy-peer-deps`；项目当前依赖树存在既有 peer dependency 冲突，普通 `npm install` 会被 peer dependency resolution 拦住。
+- 如果沙箱内运行 Vite/Vitest 时遇到 `esbuild spawn EPERM`，在提升环境下运行同一条 `npm.cmd` 命令验证真实 Windows 环境。
+
+历史 WSL 命令仅作旧环境参考：
 
 ```bash
 /home/xiaoyanjie/.bun/bin/bun run test src/pages/content/m365ChatExtractor.test.ts

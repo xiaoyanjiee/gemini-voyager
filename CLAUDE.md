@@ -2,6 +2,20 @@
 
 ## Commands
 
+Windows 本地开发优先使用 `npm.cmd`：
+
+```powershell
+npm.cmd install --package-lock=false --legacy-peer-deps
+npm.cmd run dev:chrome
+npm.cmd run build:chrome
+npm.cmd run test
+npm.cmd run typecheck
+npm.cmd exec -- eslint .
+npm.cmd exec -- prettier --check .
+```
+
+历史 Bun/WSL 命令仍可作为旧环境参考：
+
 ```bash
 bun install                # Setup
 bun run dev:chrome         # Dev (also: dev:firefox, dev:safari)
@@ -29,10 +43,10 @@ bun run docs:dev           # Docs dev server
 
 ## Verification (run before declaring done)
 
-1. `bun run typecheck` — after any `.ts`/`.tsx` change
-2. `bun run lint` — before finishing
-3. `bun run test` — all tests pass
-4. `bun run build:chrome` — builds without error
+1. `npm.cmd run typecheck` — after any `.ts`/`.tsx` change
+2. `npm.cmd exec -- eslint .` — before finishing
+3. `npm.cmd run test` — all tests pass
+4. `npm.cmd run build:chrome` — builds without error
 5. New features/fixes must include tests
 
 ## Commit Format
@@ -72,6 +86,7 @@ Then: commit `chore: bump to v{VERSION}` → `git tag v{VERSION}` → `git push 
 - **Injected CSS**: `public/contentStyle.css`.
 
 - **M365 Copilot 迁移上下文：** 修改 `src/pages/content/m365*` 或 M365 manifest matches 前，先阅读 `M365_COPILOT_CONTEXT.md`。当 selectors、浏览器测试流程或 extractor output 变化时，同步更新该文档。
+- **Windows M365 验证：** 重新 `build:chrome` 后，需要在 `edge://extensions/` reload `L:\project\dist_chrome`，再刷新 M365 页面；否则 Edge 可能继续使用旧 manifest 中的旧 content script 路径。
 
 ## Task Map
 
