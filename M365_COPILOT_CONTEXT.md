@@ -15,6 +15,7 @@
 - 真实 Edge/CDP 验证确认：content script API 位于名为 `Voyager` 的 isolated world。
 - 2026-04-26 的真实 M365 DOM 证据显示：`20` 个 raw user nodes、`40` 个 raw assistant nodes、`10` 个 article nodes、`10` 条 logical messages。
 - 自动化测试已覆盖：嵌套节点不重复、空 user 过滤、assistant 快照去重、多段 assistant 顺序、正文容器优先、chrome/feedback 清理、兼容 facade、image-only message、小 icon 过滤、fallback article、canonical id 稳定性。
+- Diagnostics 标框已改为优先标记真实 M365 message article，避免 breadcrumb/list 抢占 `msg[]` 标记名额。
 
 ## 迁移目标
 
@@ -95,6 +96,15 @@ Fallback 识别：
 - Fingerprint 格式是 `role + normalized lowercase text + image keys`。
 - Message id 格式是 `m365:<index>:<fingerprintHash>`。
 - 这些 id 对同一个已渲染页面状态的重复提取保持稳定，但不是跨会话、跨编辑的永久数据库 id。
+
+## 诊断标框规则
+
+`m365Diagnostics.ts` 只用于人工排查，不参与业务数据流。
+
+- `msg[]` 优先标记带有 `fai-UserMessage` / `fai-CopilotMessage` 的最近 `role="article"` 节点。
+- 只有找不到 M365 message class 时，才 fallback 到通用 `[role="article"]`、`[role="log"]`、`[role="feed"]`、`[class*="Message"]` 等候选。
+- Breadcrumb、list、navigation 只能作为 fallback 或 nav 诊断对象，不能抢占真实对话消息的 `msg[]` 标记。
+- 当前最多标记前 `12` 个 message candidates；这只是可视化辅助，不影响 `window.__gvExtractCanonical()` 的提取结果。
 
 ## 迁移路线
 

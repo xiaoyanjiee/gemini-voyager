@@ -13,6 +13,9 @@
 const MAX_SUMMARY_ITEMS = 8;
 
 const TAG = '[M365 Diagnostics]';
+const M365_MESSAGE_CLASS_SELECTOR = '[class*="fai-UserMessage"], [class*="fai-CopilotMessage"]';
+const MESSAGE_ARTICLE_SELECTOR = '[role="article"]';
+const MAX_MESSAGE_MARKERS = 12;
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -144,6 +147,49 @@ function collectDataAttrElements(root: Element): string[] {
     node = walker.nextNode();
   }
   return results;
+}
+
+function collectMessageCandidates(): Element[] {
+  const candidates: Element[] = [];
+  const seen = new Set<Element>();
+  const add = (el: Element): void => {
+    if (seen.has(el) || !isVisible(el)) return;
+    seen.add(el);
+    candidates.push(el);
+  };
+
+  document.querySelectorAll(M365_MESSAGE_CLASS_SELECTOR).forEach((el) => {
+    add(el.closest(MESSAGE_ARTICLE_SELECTOR) || el);
+  });
+
+  if (candidates.length > 0) {
+    return candidates;
+  }
+
+  const fallbackSelectors = [
+    MESSAGE_ARTICLE_SELECTOR,
+    '[role="log"]',
+    '[role="feed"]',
+    '[data-content]',
+    '[class*="message"]',
+    '[class*="Message"]',
+    '[class*="conversation"]',
+    '[class*="Conversation"]',
+    '[class*="response"]',
+    '[class*="Response"]',
+    '[class*="turn"]',
+    '[class*="Turn"]',
+  ];
+
+  for (const sel of fallbackSelectors) {
+    try {
+      document.querySelectorAll(sel).forEach(add);
+    } catch {
+      /* 跳过无效选择器 */
+    }
+  }
+
+  return candidates;
 }
 
 // ---------------------------------------------------------------------------
@@ -281,35 +327,8 @@ function runDiagnostics(): DiagResult {
 
   // -- 消息容器候选 --
   lines.push('');
-  lines.push('--- 消息容器候选（按 role / class / aria 属性匹配）---');
-  const messageSelectors = [
-    '[role="list"]',
-    '[role="listitem"]',
-    '[role="log"]',
-    '[role="article"]',
-    '[role="feed"]',
-    '[role="group"]',
-    '[data-content]',
-    '[class*="message"]',
-    '[class*="Message"]',
-    '[class*="chat"]',
-    '[class*="Chat"]',
-    '[class*="conversation"]',
-    '[class*="Conversation"]',
-    '[class*="response"]',
-    '[class*="Response"]',
-    '[class*="turn"]',
-    '[class*="Turn"]',
-  ];
-  const messageCandidates = new Set<Element>();
-  for (const sel of messageSelectors) {
-    try {
-      document.querySelectorAll(sel).forEach((el) => messageCandidates.add(el));
-    } catch {
-      /* 跳过无效选择器 */
-    }
-  }
-  const msgArray = Array.from(messageCandidates).filter(isVisible).slice(0, 20);
+  lines.push('--- 消息容器候选（优先 M365 message article）---');
+  const msgArray = collectMessageCandidates().slice(0, 20);
   if (msgArray.length === 0) {
     lines.push('  (没有找到明显的消息容器候选)');
   } else {
@@ -318,7 +337,7 @@ function runDiagnostics(): DiagResult {
       const children = el.children.length;
       const text = (el.textContent || '').trim().slice(0, 60);
       lines.push(`    [${i}] ${describeElement(el)} 子节点=${children} 文本="${text}..."`);
-      if (i < 5) {
+      if (i < MAX_MESSAGE_MARKERS) {
         markElement(el, `msg[${i}]`, '#3498db');
       }
     });
