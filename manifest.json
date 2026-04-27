@@ -38,7 +38,8 @@
     "https://accounts.google.com/*",
     "https://*.googleusercontent.com/*",
     "https://lh3.google.com/*",
-    "https://*.ggpht.com/*"
+    "https://*.ggpht.com/*",
+    "https://m365.cloud.microsoft/*"
   ],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "content_security_policy": {
@@ -54,7 +55,8 @@
         "https://gemini.google.com/*",
         "https://business.gemini.google/*",
         "https://aistudio.google.com/*",
-        "https://aistudio.google.cn/*"
+        "https://aistudio.google.cn/*",
+        "https://m365.cloud.microsoft/*"
       ],
       "js": ["src/pages/content/index.tsx"],
       "css": ["contentStyle.css"]

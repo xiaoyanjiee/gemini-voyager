@@ -71,6 +71,8 @@ Then: commit `chore: bump to v{VERSION}` → `git tag v{VERSION}` → `git push 
 - **Translations**: `src/locales/*/messages.json` (10 languages).
 - **Injected CSS**: `public/contentStyle.css`.
 
+- **M365 Copilot migration context:** read `M365_COPILOT_CONTEXT.md` before changing `src/pages/content/m365*` or M365 manifest matches. Keep that document updated when selectors, browser-test workflow, or extractor output changes.
+
 ## Task Map
 
 | Task | Where |

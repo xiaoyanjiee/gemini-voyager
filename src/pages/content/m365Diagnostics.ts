@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * M365 Copilot DOM Diagnostics -- 临时诊断模块
  *
@@ -62,9 +63,10 @@ const MARKER_STYLE_ID = 'gv-m365-diag-style';
 function describeElement(el: Element): string {
   const tag = el.tagName.toLowerCase();
   const id = el.id ? `#${el.id}` : '';
-  const classes = el.className && typeof el.className === 'string'
-    ? '.' + el.className.trim().split(/\s+/).slice(0, 3).join('.')
-    : '';
+  const classes =
+    el.className && typeof el.className === 'string'
+      ? '.' + el.className.trim().split(/\s+/).slice(0, 3).join('.')
+      : '';
   const role = el.getAttribute('role') ? `[role="${el.getAttribute('role')}"]` : '';
   const ariaLabel = el.getAttribute('aria-label')
     ? `[aria-label="${el.getAttribute('aria-label')?.slice(0, 40)}"]`
@@ -105,7 +107,9 @@ function summarizeElement(el: Element): ElementSummary {
 function detectShadowRoots(root: Element, results: string[], depth = 0): void {
   if (depth > 10) return; // 防止过深递归
   if (root.shadowRoot) {
-    results.push(`  ${describeElement(root)} -- 有 shadowRoot (${root.shadowRoot.children.length} 个子节点)`);
+    results.push(
+      `  ${describeElement(root)} -- 有 shadowRoot (${root.shadowRoot.children.length} 个子节点)`,
+    );
     for (const child of root.shadowRoot.children) {
       if (child instanceof Element) {
         detectShadowRoots(child, results, depth + 1);
@@ -252,18 +256,24 @@ function runDiagnostics(): DiagResult {
   const editables = document.querySelectorAll('[contenteditable="true"]');
   lines.push(`  textarea: ${textareas.length} 个`);
   textareas.forEach((el, i) => {
-    lines.push(`    [${i}] ${describeElement(el)} 可见=${isVisible(el)} 大小=${(el as HTMLElement).offsetWidth}x${(el as HTMLElement).offsetHeight}`);
+    lines.push(
+      `    [${i}] ${describeElement(el)} 可见=${isVisible(el)} 大小=${(el as HTMLElement).offsetWidth}x${(el as HTMLElement).offsetHeight}`,
+    );
     markElement(el, `textarea[${i}]`, '#e74c3c');
   });
   lines.push(`  input[text]: ${textInputs.length} 个`);
   textInputs.forEach((el, i) => {
     if (isVisible(el)) {
-      lines.push(`    [${i}] ${describeElement(el)} 大小=${(el as HTMLElement).offsetWidth}x${(el as HTMLElement).offsetHeight}`);
+      lines.push(
+        `    [${i}] ${describeElement(el)} 大小=${(el as HTMLElement).offsetWidth}x${(el as HTMLElement).offsetHeight}`,
+      );
     }
   });
   lines.push(`  contenteditable: ${editables.length} 个`);
   editables.forEach((el, i) => {
-    lines.push(`    [${i}] ${describeElement(el)} 可见=${isVisible(el)} 大小=${(el as HTMLElement).offsetWidth}x${(el as HTMLElement).offsetHeight}`);
+    lines.push(
+      `    [${i}] ${describeElement(el)} 可见=${isVisible(el)} 大小=${(el as HTMLElement).offsetWidth}x${(el as HTMLElement).offsetHeight}`,
+    );
     if (isVisible(el)) {
       markElement(el, `editable[${i}]`, '#e67e22');
     }
@@ -295,7 +305,9 @@ function runDiagnostics(): DiagResult {
   for (const sel of messageSelectors) {
     try {
       document.querySelectorAll(sel).forEach((el) => messageCandidates.add(el));
-    } catch { /* 跳过无效选择器 */ }
+    } catch {
+      /* 跳过无效选择器 */
+    }
   }
   const msgArray = Array.from(messageCandidates).filter(isVisible).slice(0, 20);
   if (msgArray.length === 0) {
@@ -337,7 +349,9 @@ function runDiagnostics(): DiagResult {
   for (const sel of navSelectors) {
     try {
       document.querySelectorAll(sel).forEach((el) => navCandidates.add(el));
-    } catch { /* 跳过无效选择器 */ }
+    } catch {
+      /* 跳过无效选择器 */
+    }
   }
   const navArray = Array.from(navCandidates).filter(isVisible).slice(0, 15);
   if (navArray.length === 0) {
@@ -345,7 +359,9 @@ function runDiagnostics(): DiagResult {
   } else {
     lines.push(`  找到 ${navArray.length} 个候选 (只显示可见的前 15 个):`);
     navArray.forEach((el, i) => {
-      lines.push(`    [${i}] ${describeElement(el)} 大小=${(el as HTMLElement).offsetWidth}x${(el as HTMLElement).offsetHeight}`);
+      lines.push(
+        `    [${i}] ${describeElement(el)} 大小=${(el as HTMLElement).offsetWidth}x${(el as HTMLElement).offsetHeight}`,
+      );
       if (i < 3) {
         markElement(el, `nav[${i}]`, '#2ecc71');
       }
@@ -363,7 +379,9 @@ function runDiagnostics(): DiagResult {
     roleArray.forEach((el, i) => {
       const role = el.getAttribute('role') || '';
       const label = el.getAttribute('aria-label') || '';
-      lines.push(`    [${i}] ${describeElement(el)} role="${role}" aria-label="${label.slice(0, 50)}"`);
+      lines.push(
+        `    [${i}] ${describeElement(el)} role="${role}" aria-label="${label.slice(0, 50)}"`,
+      );
     });
   }
 
@@ -392,7 +410,10 @@ function runDiagnostics(): DiagResult {
       },
       textInput: {
         total: textInputs.length,
-        items: Array.from(textInputs).filter(isVisible).slice(0, MAX_SUMMARY_ITEMS).map(summarizeElement),
+        items: Array.from(textInputs)
+          .filter(isVisible)
+          .slice(0, MAX_SUMMARY_ITEMS)
+          .map(summarizeElement),
       },
       contenteditable: {
         total: editables.length,
