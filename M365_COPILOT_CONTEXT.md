@@ -358,5 +358,6 @@ git diff --check
 - 如果 M365 selectors、canonical model、extractor output、export adapter、安全策略、真实浏览器验证流程、迁移优先级或测试命令发生变化，必须同时更新本文件和 `M365_CHANGELOG.md`。
 - 如果后续任务有独立 plan 或 Codex 先产出 `<proposed_plan>`，完成任务时必须把 plan 摘要和实际偏差同步进本文件和 `M365_CHANGELOG.md`。
 - 每次开发完成后，后续 Codex 必须把用户当作代码新手，用简明语言解释做了什么、为什么这么做、如何验证；然后和用户一起跑一遍真实测试流程，并根据测试结果更新本文件和 `M365_CHANGELOG.md`。
+- 面向用户的输出默认使用中文；plan / proposed_plan 可以使用英文。
 - 本文件写简洁事实；`M365_CHANGELOG.md` 写详细原因、影响、验证和下一步。
 - 后续提交时继续注意当前工作区可能存在无关 staged 文件，必要时使用显式 pathspec 提交。

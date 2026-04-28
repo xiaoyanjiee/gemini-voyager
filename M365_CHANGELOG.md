@@ -264,6 +264,7 @@ git diff --check
 - 更新 M365 selectors、canonical shape、extractor output、安全策略、测试命令或真实浏览器验证流程时，必须同时更新 `M365_COPILOT_CONTEXT.md` 和本文件。
 - 新任务如果有明确 plan，必须把 plan 的目标、范围、关键接口、测试要求、延期项和最终验证结果合并进 `M365_COPILOT_CONTEXT.md` 和本文件；不要只记录代码结果。
 - 每次开发完成后，后续 Codex 必须把用户当作代码新手：先用简明语言解释本次改动、关键文件和风险点，再陪用户跑一遍可复现的真实测试流程，最后根据测试结果更新 `M365_COPILOT_CONTEXT.md` 和本文件。
+- 面向用户的输出默认使用中文；plan / proposed_plan 可以使用英文。
 - 每次任务完成后按项目规则提交 Git；如果工作区已有无关 staged 文件，提交时必须使用显式 pathspec 避免误带。
 
 ## 下一步建议

@@ -40,6 +40,7 @@ bun run docs:dev           # Docs dev server
 8. **Never modify `dist_*` folders directly.**
 9. **Never commit `.env` or secrets.**
 10. **When adding Material Symbol icons**, add the icon name to `icon_names=` in the Google Fonts URL in `src/pages/popup/index.html`.
+11. **User-facing replies default to Chinese.** Plans / `proposed_plan` content may be written in English.
 
 ## Verification (run before declaring done)
 
@@ -87,6 +88,7 @@ Then: commit `chore: bump to v{VERSION}` → `git tag v{VERSION}` → `git push 
 
 - **M365 Copilot 迁移上下文：** 修改 `src/pages/content/m365*` 或 M365 manifest matches 前，先阅读 `M365_COPILOT_CONTEXT.md`。当 selectors、浏览器测试流程或 extractor output 变化时，同步更新该文档。
 - **Windows M365 验证：** 重新 `build:chrome` 后，需要在 `edge://extensions/` reload `L:\project\dist_chrome`，再刷新 M365 页面；否则 Edge 可能继续使用旧 manifest 中的旧 content script 路径。
+- **用户沟通语言：** 面向用户的最终回复和过程更新默认使用中文；plan / proposed_plan 可以使用英文。
 
 ## Task Map
 
