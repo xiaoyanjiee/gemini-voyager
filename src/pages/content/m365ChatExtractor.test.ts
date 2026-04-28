@@ -113,6 +113,34 @@ describe('extractM365Messages', () => {
     ]);
   });
 
+  it('preserves basic assistant HTML structure as Markdown text', () => {
+    document.body.innerHTML = `
+      <article role="article" class="fai-CopilotMessage">
+        <div class="fai-CopilotMessage__content">
+          <p><strong>Copilot 正常工作中</strong></p>
+          <p>如果你接下来想测试的是：</p>
+          <ul>
+            <li>指令是否被正确理解</li>
+            <li>中文/英文混合输入</li>
+          </ul>
+          <p>可以继续输入。</p>
+        </div>
+      </article>
+    `;
+
+    const result = extractM365Messages();
+
+    expect(result.totalMessages).toBe(1);
+    expect(result.messages[0].text).toBe(
+      [
+        '**Copilot 正常工作中**',
+        '如果你接下来想测试的是：',
+        ['- 指令是否被正确理解', '- 中文/英文混合输入'].join('\n'),
+        '可以继续输入。',
+      ].join('\n\n'),
+    );
+  });
+
   it('removes assistant chrome, chain-of-thought controls, and feedback actions from extracted text', () => {
     document.body.innerHTML = `
       <article role="article" class="fai-CopilotMessage">
@@ -173,7 +201,7 @@ describe('extractM365Messages', () => {
     ]);
     expect(conversation.messages.map((message) => message.text)).toEqual([
       'first prompt',
-      'First answer\ncontinued answer',
+      'First answer\n\ncontinued answer',
       'second prompt',
       'Second answer',
     ]);

@@ -1,6 +1,6 @@
 # M365 Copilot 变更与进度文档
 
-最后更新：2026-04-28
+最后更新：2026-04-29
 当前状态：M365 canonical baseline、export adapter baseline、JSON export MVP 和 Markdown export MVP 底层能力已落地，diagnostics 已改为手动 gate
 配套上下文：`M365_COPILOT_CONTEXT.md`
 
@@ -47,6 +47,7 @@
 - `M365ExportService.buildTurns()` 和 `buildExportInput()` 已能从 canonical conversation 生成现有 export service 可消费的 `ChatTurn[]` 和 metadata。
 - `M365ExportService.buildJsonExport()` 和 `serializeJsonExport()` 已能生成纯数据 M365 JSON payload/string。
 - `M365ExportService.buildMarkdownExport()` 和 `serializeMarkdownExport()` 已能生成包含 metadata 和 turns 的 M365 Markdown string。
+- M365 assistant 正文提取会把常见 HTML 结构保留为 Markdown 文本，包括段落空行、粗体、斜体、基础列表、基础链接和 code/pre。
 - `window.__gvExportM365Json()` / `window.__gvExportM365Markdown()` 是仅用于本地验证的 M365 debug/dev 入口，会下载当前页面 JSON / Markdown 并保存对应的 `window.__gvLastM365*Export`。
 - Export adapter 仍未接入 M365 UI，不改变 Gemini export 行为。
 
@@ -161,6 +162,7 @@ Plan 内容：
 - `M365ExportService.serializeMarkdownExport(conversation, title?)` 作为 public serializer，与 JSON serializer 命名保持一致。
 - Markdown serializer 复用 `buildExportInput()` / `buildTurns()`，所以继续消费 `CanonicalConversation`，不新增 DOM 扫描。
 - Markdown 输出保留 user/assistant、assistant-only、user-only 和 image-only turns。
+- 2026-04-29 追加修复：assistant canonical text 不再只取 flattened `textContent`，而是把常见 M365 assistant HTML 结构转换成 Markdown 文本，保留 `**粗体**`、`- 列表` 和段落空行。
 - `window.__gvExportM365Markdown()` 作为 M365 debug/dev only 入口，可在真机页面下载当前 Markdown 并保存 `window.__gvLastM365MarkdownExport`。
 
 当前限制：
@@ -198,6 +200,26 @@ M365 image content 会被转换为 Markdown image 语法，因此 URL 必须先�
 - 保留常见 raster image data URL 的导出能力。
 
 ## 验证记录
+
+2026-04-29 M365 Markdown HTML 结构保真修复后通过：
+
+```powershell
+npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts
+npm.cmd run typecheck
+npm.cmd exec -- eslint src/pages/content/m365*.ts src/pages/content/m365*.test.ts
+npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md M365_CHANGELOG.md AGENTS.md CLAUDE.md
+npm.cmd run build:chrome
+git diff --check
+```
+
+验证结果：
+
+- Targeted tests：2 个 test files，27 个 tests 全部通过；新增覆盖 assistant HTML 中的粗体、段落和列表转 Markdown。
+- `typecheck` 通过。
+- M365 目标文件 eslint 通过。
+- Prettier check 通过。
+- `build:chrome` 通过；沙箱内遇到已知 `esbuild spawn EPERM` 后，在提升后的真实 Windows 环境重跑通过，Vite 仅输出既有 chunk/asset warnings。
+- 真机验证：Edge reload `L:\project\dist_chrome` 后，在 M365 页面 `Voyager` isolated world 运行 `window.__gvExportM365Markdown()`，导出 `m365-copilot-2026-04-28T16-23-59-118Z.md`；机器检查确认包含 `**粗体**`、`- 列表`、段落空行且无 DOM 泄漏标记，用户人工查看后确认“新版正常”。
 
 2026-04-28 M365 Markdown export MVP 后通过：
 
