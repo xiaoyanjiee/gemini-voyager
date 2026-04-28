@@ -18,6 +18,24 @@ interface M365DraftTurn {
   assistantParts: string[];
 }
 
+export interface M365JsonExportTurn {
+  user: string;
+  assistant: string;
+  starred: boolean;
+  omitEmptySections: boolean;
+}
+
+export interface M365JsonExportPayload {
+  platform: 'm365-copilot';
+  title: string;
+  url: string;
+  exportedAt: string;
+  count: number;
+  turns: M365JsonExportTurn[];
+}
+
+const DEFAULT_M365_EXPORT_TITLE = 'M365 Copilot';
+const M365_JSON_PLATFORM = 'm365-copilot';
 const MAX_DATA_IMAGE_URL_LENGTH = 1_048_576;
 const SAFE_DATA_IMAGE_URL_PATTERN = /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/i;
 
@@ -68,7 +86,7 @@ export class M365ExportService {
 
   static buildExportInput(
     conversation: CanonicalConversation,
-    title = 'M365 Copilot',
+    title = DEFAULT_M365_EXPORT_TITLE,
   ): M365ExportInput {
     const turns = this.buildTurns(conversation);
     return {
@@ -80,6 +98,30 @@ export class M365ExportService {
         title,
       },
     };
+  }
+
+  static buildJsonExport(
+    conversation: CanonicalConversation,
+    title?: string,
+  ): M365JsonExportPayload {
+    const input = this.buildExportInput(conversation, title);
+    return {
+      platform: M365_JSON_PLATFORM,
+      title: input.metadata.title || DEFAULT_M365_EXPORT_TITLE,
+      url: input.metadata.url,
+      exportedAt: input.metadata.exportedAt,
+      count: input.metadata.count,
+      turns: input.turns.map((turn) => ({
+        user: turn.user,
+        assistant: turn.assistant,
+        starred: turn.starred,
+        omitEmptySections: turn.omitEmptySections === true,
+      })),
+    };
+  }
+
+  static serializeJsonExport(conversation: CanonicalConversation, title?: string): string {
+    return JSON.stringify(this.buildJsonExport(conversation, title), null, 2);
   }
 
   private static toExportText(message: CanonicalMessage): string {

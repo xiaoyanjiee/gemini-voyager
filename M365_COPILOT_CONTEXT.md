@@ -18,7 +18,8 @@
 - 自动化测试已覆盖：嵌套节点不重复、空 user 过滤、assistant 快照去重、多段 assistant 顺序、正文容器优先、chrome/feedback 清理、兼容 facade、image-only message、小 icon 过滤、fallback article、canonical id 稳定性。
 - 手动运行 Diagnostics 时，标框优先标记真实 M365 message article，避免 breadcrumb/list 抢占 `msg[]` 标记名额。
 - 2026-04-28 已在 Windows 本地开发环境验证：`npm.cmd` 测试/构建可用，Edge 加载 `L:\project\dist_chrome` 后，`Voyager` isolated world 中存在 `window.__gvDiagRun()` / `window.__gvExtract()` / `window.__gvExtractCanonical()`。
-- `M365ExportService` 已提供只读 export adapter：从 `CanonicalConversation` 生成现有 `ChatTurn[]` 和 `ConversationMetadata`，支持 plain text 与安全图片 Markdown，但尚未接入 M365 export UI。
+- `M365ExportService` 已提供只读 export adapter：从 `CanonicalConversation` 生成现有 `ChatTurn[]` 和 `ConversationMetadata`，支持 plain text、安全图片 Markdown 和 M365 JSON export MVP，但尚未接入正式 M365 export UI。
+- 手动 JSON 验证入口：`window.__gvExportM365Json()`；该入口仅用于本地 M365 debug/dev 真机测试，会下载当前页面 JSON 并保存到 `window.__gvLastM365JsonExport`。
 
 ## 已吸收的计划归档
 
@@ -44,9 +45,11 @@ Plan 3：M365 export adapter baseline
 
 - 目标是增加从 `CanonicalConversation` 到现有 export 输入的只读 adapter，不接 M365 export UI。
 - `M365ExportService.buildTurns(conversation)` 生成现有 `ChatTurn[]`；`buildExportInput(conversation, title?)` 生成 `{ turns, metadata }`。
+- `M365ExportService.buildJsonExport(conversation, title?)` 生成纯 JSON-safe payload；`serializeJsonExport(conversation, title?)` 生成可被 `JSON.parse` 解析的 pretty JSON 字符串。
 - user message 开启新 turn；后续 assistant 归入当前 turn；连续 assistant 用空行合并；assistant-only 和 user-only turn 都保留。
 - `starred` 固定为 `false`，`omitEmptySections` 固定为 `true`。
 - 不向现有 export service 传入 M365 `userElement` / `assistantElement`，避免 Gemini 专用 `DOMContentExtractor` 误读 M365 DOM。
+- M365 JSON payload 顶层包含 `platform: "m365-copilot"`、`title`、`url`、`exportedAt`、`count`、`turns`；每个 turn 只包含 `user`、`assistant`、`starred`、`omitEmptySections`，不包含 DOM elements。
 - canonical 图片转换为安全 Markdown 图片行；只允许 `http:`、`https:`、`blob:` 和不超过 `1_048_576` 字符的 `data:image/png|jpeg|webp|gif;base64,...` 来源，其余丢弃。
 
 ## 迁移目标
@@ -144,8 +147,11 @@ Conversation export 路线：
 
 - 当前 `M365ExportService.buildTurns()` 已把 `CanonicalMessage` 转换为现有 export turns，不允许直接扫描 M365 DOM。
 - 当前 `M365ExportService.buildExportInput()` 已生成 `{ turns, metadata }`，metadata 来自 canonical `url` / `timestamp`，默认标题为 `M365 Copilot`。
+- 当前 `M365ExportService.buildJsonExport()` 已生成纯 JSON-safe payload：`platform: "m365-copilot"`、`title`、`url`、`exportedAt`、`count`、`turns`。每个 turn 只包含 `user`、`assistant`、`starred`、`omitEmptySections`。
+- 当前 `M365ExportService.serializeJsonExport()` 已生成可被 `JSON.parse` 解析的 pretty JSON 字符串。
+- 当前 `window.__gvExportM365Json()` 可在 `Voyager` isolated world 中作为 M365 debug/dev only 入口下载当前页面 JSON，并把结果保存到 `window.__gvLastM365JsonExport`；这不是最终导出 UI。
 - 图片会转换为 Markdown image 语法；只允许 `http:`、`https:`、`blob:` 和不超过 `1_048_576` 字符的 `data:image/png|jpeg|webp|gif;base64,...` 来源，其余 URL 会被过滤。
-- 当前仍未添加 M365 export UI；只有当 adapter 在更多真实对话上稳定后，才添加入口。
+- 当前仍未添加 M365 export UI；只有当 JSON/dev export 能力在更多真实对话上稳定后，才添加正式入口。
 - 优先保留 JSON 和 Markdown；PDF/Image 等富内容处理验证后再复用现有 export services。
 
 Timeline 路线：
@@ -244,6 +250,7 @@ Windows 环境注意事项：
 - `extractM365Messages()` 必须继续由 canonical 输出驱动。
 - 同一 DOM 状态重复提取时，canonical ids 和 fingerprints 保持稳定。
 - `M365ExportService.buildTurns()` 必须只消费 canonical messages，不能向现有 export service 传入 M365 DOM elements。
+- `M365ExportService.buildJsonExport()` / `serializeJsonExport()` 必须生成纯数据 JSON，不包含 `sourceElement`、`contentElement`、`userElement`、`assistantElement` 或 DOM object。
 - image-only message 必须能以安全 Markdown 图片行进入 export turns；不安全图片 URL 必须被过滤。
 
 ## 已知缺口
@@ -301,7 +308,8 @@ Windows 环境注意事项：
 - M365 页面只注册手动 diagnostics 和 chat extractor，不启动 Gemini 功能。
 - Diagnostics 默认不会自动扫描 DOM、注入 marker、记录 URL/DOM/text 摘要；人工排查时使用 `window.__gvDiagRun()`。
 - `window.__gvExtract()` 和 `window.__gvExtractCanonical()` 仍是当前 M365 提取调试入口。
-- `M365ExportService` 已提供只读 adapter，可从 `CanonicalConversation` 生成 `ChatTurn[]` 和 metadata，但仍未接入 M365 export UI。
+- `M365ExportService` 已提供只读 adapter，可从 `CanonicalConversation` 生成 `ChatTurn[]`、metadata 和 M365 JSON export payload，但仍未接入正式 M365 export UI。
+- `window.__gvExportM365Json()` 是 M365 debug/dev only 本地验证入口，可下载当前 canonical conversation 的 JSON，并保存 `window.__gvLastM365JsonExport`。
 - Markdown image URL 只允许 `http:`、`https:`、`blob:` 和不超过 `1_048_576` 字符的 `data:image/png|jpeg|webp|gif;base64,...`。
 
 最近一次验证通过：
@@ -310,7 +318,7 @@ Windows 环境注意事项：
 npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts
 npm.cmd run typecheck
 npm.cmd exec -- eslint src/pages/content/m365*.ts src/pages/content/m365*.test.ts
-npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md
+npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md M365_CHANGELOG.md
 npm.cmd run build:chrome
 git diff --check
 ```

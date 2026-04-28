@@ -6,7 +6,7 @@ import type {
   M365ContentItem,
   M365ImageContent,
 } from './m365ConversationTypes';
-import { M365ExportService } from './m365FeatureServices';
+import { M365ExportService, type M365JsonExportPayload } from './m365FeatureServices';
 
 function createImage(overrides: Partial<M365ImageContent> = {}): M365ImageContent {
   return {
@@ -192,6 +192,88 @@ describe('M365ExportService', () => {
       count: 1,
       title: 'Quarterly chat',
     });
+  });
+
+  it('serializes a parseable JSON export payload with M365 metadata', () => {
+    const conversation = createConversation([
+      createMessage('user', [{ kind: 'text', text: 'Summarize the launch plan' }], 0),
+      createMessage('assistant', [{ kind: 'text', text: 'Launch summary' }], 1),
+    ]);
+
+    const serialized = M365ExportService.serializeJsonExport(conversation, 'Launch chat');
+    const parsed = JSON.parse(serialized) as M365JsonExportPayload;
+
+    expect(parsed).toEqual({
+      platform: 'm365-copilot',
+      title: 'Launch chat',
+      url: 'https://m365.cloud.microsoft/chat',
+      exportedAt: '2026-04-28T04:00:00.000Z',
+      count: 1,
+      turns: [
+        {
+          user: 'Summarize the launch plan',
+          assistant: 'Launch summary',
+          starred: false,
+          omitEmptySections: true,
+        },
+      ],
+    });
+  });
+
+  it('keeps assistant-only, user-only, and image-only turns in JSON export', () => {
+    const conversation = createConversation([
+      createMessage('assistant', [createImage({ alt: 'Only chart' })], 0),
+      createMessage('user', [{ kind: 'text', text: 'Only prompt' }], 1),
+      createMessage('user', [{ kind: 'text', text: 'Prompt with answer' }], 2),
+      createMessage('assistant', [{ kind: 'text', text: 'Answer text' }], 3),
+    ]);
+
+    const payload = M365ExportService.buildJsonExport(conversation);
+
+    expect(payload.count).toBe(3);
+    expect(payload.turns).toEqual([
+      {
+        user: '',
+        assistant: '![Only chart](https://example.test/image.png)',
+        starred: false,
+        omitEmptySections: true,
+      },
+      {
+        user: 'Only prompt',
+        assistant: '',
+        starred: false,
+        omitEmptySections: true,
+      },
+      {
+        user: 'Prompt with answer',
+        assistant: 'Answer text',
+        starred: false,
+        omitEmptySections: true,
+      },
+    ]);
+  });
+
+  it('does not serialize canonical DOM elements into JSON export turns', () => {
+    const conversation = createConversation([
+      createMessage('user', [{ kind: 'text', text: 'Prompt' }], 0),
+      createMessage('assistant', [{ kind: 'text', text: 'Answer' }], 1),
+    ]);
+
+    const serialized = M365ExportService.serializeJsonExport(conversation);
+    const parsed = JSON.parse(serialized) as M365JsonExportPayload;
+
+    expect(Object.keys(parsed.turns[0])).toEqual([
+      'user',
+      'assistant',
+      'starred',
+      'omitEmptySections',
+    ]);
+    expect(serialized).not.toContain('sourceElement');
+    expect(serialized).not.toContain('contentElement');
+    expect(serialized).not.toContain('userElement');
+    expect(serialized).not.toContain('assistantElement');
+    expect(serialized).not.toContain('HTMLElement');
+    expect(serialized).not.toContain('Node');
   });
 
   it('uses the default M365 title when one is not provided', () => {

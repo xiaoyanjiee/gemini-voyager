@@ -1,7 +1,7 @@
 # M365 Copilot 变更与进度文档
 
 最后更新：2026-04-28
-当前状态：M365 canonical baseline 和 export adapter baseline 已落地，diagnostics 已改为手动 gate
+当前状态：M365 canonical baseline、export adapter baseline 和 JSON export MVP 底层能力已落地，diagnostics 已改为手动 gate
 配套上下文：`M365_COPILOT_CONTEXT.md`
 
 后续 Codex 会话开始修改 M365 相关代码前，必须先阅读本文件和 `M365_COPILOT_CONTEXT.md`。任何改变 M365 selectors、canonical model、extractor 输出、export adapter、安全策略、浏览器验证流程或迁移优先级的任务，都必须同时更新这两个文档。
@@ -43,6 +43,8 @@
 - `window.__gvDiagRun()` / `window.__gvDiagClear()` 仍可用于人工排查，但默认不会自动扫描 DOM、注入 marker、记录 URL/DOM/text 摘要。
 - `CanonicalConversation` / `CanonicalMessage` 已成为 M365 extraction 和未来 export/timeline/layout 之间的强制边界。
 - `M365ExportService.buildTurns()` 和 `buildExportInput()` 已能从 canonical conversation 生成现有 export service 可消费的 `ChatTurn[]` 和 metadata。
+- `M365ExportService.buildJsonExport()` 和 `serializeJsonExport()` 已能生成纯数据 M365 JSON payload/string。
+- `window.__gvExportM365Json()` 是仅用于本地验证的 M365 debug/dev 入口，会下载当前页面 JSON 并保存 `window.__gvLastM365JsonExport`。
 - Export adapter 仍未接入 M365 UI，不改变 Gemini export 行为。
 
 ## 阶段变更记录
@@ -103,7 +105,26 @@
 - 当前重点是 JSON/Markdown 所需的 text + safe image markdown 输入。
 - PDF/Image/rich Markdown fidelity 需要更多真实 M365 样本验证后再接入。
 
-### 4. Image URL 安全边界
+### 4. M365 JSON export MVP
+
+目标是在不接入正式 UI、不调用 Gemini DOM extractor 的前提下，让 M365 canonical conversation 可以生成稳定 JSON。
+
+已完成：
+
+- `M365ExportService.buildJsonExport(conversation, title?)` 生成纯 JSON-safe payload。
+- `M365ExportService.serializeJsonExport(conversation, title?)` 生成可被 `JSON.parse` 解析的 pretty JSON 字符串。
+- JSON payload 顶层包含 `platform: "m365-copilot"`、`title`、`url`、`exportedAt`、`count`、`turns`。
+- 每个 JSON turn 只包含 `user`、`assistant`、`starred`、`omitEmptySections`，不包含 `sourceElement`、`contentElement`、`userElement`、`assistantElement` 或 DOM object。
+- image-only message 继续以安全 Markdown 图片行进入 JSON，不额外下载图片。
+- `window.__gvExportM365Json()` 作为 M365 debug/dev only 入口，可在真机页面下载当前 JSON 并保存 `window.__gvLastM365JsonExport`。
+
+当前限制：
+
+- 仍未添加正式 M365 export UI。
+- 暂不做 Markdown、PDF、Image export、timeline 或 chatWidth 接入。
+- Debug/dev helper 仅用于本地验证，不作为产品入口。
+
+### 5. Image URL 安全边界
 
 M365 image content 会被转换为 Markdown image 语法，因此 URL 必须先过滤。
 
@@ -133,7 +154,7 @@ M365 image content 会被转换为 Markdown image 语法，因此 URL 必须先�
 
 ## 验证记录
 
-2026-04-28 最近一次修复后通过：
+2026-04-28 M365 JSON export MVP 后通过：
 
 ```powershell
 npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts
@@ -146,7 +167,7 @@ git diff --check
 
 验证结果：
 
-- Targeted tests：2 个 test files，20 个 tests 全部通过。
+- Targeted tests：2 个 test files，23 个 tests 全部通过。
 - `typecheck` 通过。
 - M365 目标文件 eslint 通过。
 - Prettier check 通过。

@@ -2,8 +2,10 @@
 import { CanonicalConversationBuilder } from './m365CanonicalConversation';
 import { M365ConversationExtractor } from './m365ConversationExtractor';
 import type { CanonicalConversation, M365ContentItem } from './m365ConversationTypes';
+import { M365ExportService } from './m365FeatureServices';
 
 const TAG = '[M365 ChatExtractor]';
+const DEFAULT_M365_EXPORT_TITLE = 'M365 Copilot';
 
 interface ChatMessage {
   id: string;
@@ -26,6 +28,12 @@ interface ExtractResult {
   assistantMessages: number;
   totalImages: number;
   messages: ChatMessage[];
+}
+
+interface M365JsonDebugExportResult {
+  filename: string;
+  json: string;
+  payload: ReturnType<typeof M365ExportService.buildJsonExport>;
 }
 
 export function extractM365CanonicalConversation(): CanonicalConversation {
@@ -85,9 +93,50 @@ export function extractM365Messages(): ExtractResult {
   return result;
 }
 
+function getM365ExportTitle(): string {
+  return document.title.trim() || DEFAULT_M365_EXPORT_TITLE;
+}
+
+function buildM365JsonFilename(timestamp: string): string {
+  const safeTimestamp = timestamp.replace(/[:.]/g, '-');
+  return `m365-copilot-${safeTimestamp}.json`;
+}
+
+function downloadJson(json: string, filename: string): void {
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  setTimeout(() => {
+    try {
+      document.body.removeChild(anchor);
+    } catch {
+      /* ignore */
+    }
+    URL.revokeObjectURL(url);
+  }, 0);
+}
+
+function exportM365JsonForDebug(): M365JsonDebugExportResult {
+  const conversation = extractM365CanonicalConversation();
+  const title = getM365ExportTitle();
+  const payload = M365ExportService.buildJsonExport(conversation, title);
+  const json = M365ExportService.serializeJsonExport(conversation, title);
+  const filename = buildM365JsonFilename(payload.exportedAt);
+  downloadJson(json, filename);
+
+  const result = { filename, json, payload };
+  (window as unknown as Record<string, unknown>).__gvLastM365JsonExport = result;
+  console.log(`${TAG} M365 JSON debug export downloaded as ${filename}.`, payload);
+  return result;
+}
+
 export function startM365ChatExtractor(): void {
   console.log(
-    `${TAG} Chat extractor loaded. Run window.__gvExtract() to extract current conversation.`,
+    `${TAG} Chat extractor loaded. Run window.__gvExtract() to extract current conversation. M365 JSON debug/dev only: window.__gvExportM365Json().`,
   );
 
   (window as unknown as Record<string, unknown>).__gvExtract = () => {
@@ -102,6 +151,10 @@ export function startM365ChatExtractor(): void {
     return result;
   };
 
+  (window as unknown as Record<string, unknown>).__gvExportM365Json = () =>
+    exportM365JsonForDebug();
+
   (window as unknown as Record<string, unknown>).__gvLastExtractResult = null;
   (window as unknown as Record<string, unknown>).__gvLastCanonicalConversation = null;
+  (window as unknown as Record<string, unknown>).__gvLastM365JsonExport = null;
 }
