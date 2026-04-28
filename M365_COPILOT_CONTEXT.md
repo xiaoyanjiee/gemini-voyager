@@ -10,14 +10,14 @@
 ## 当前已完成功能
 
 - 扩展已通过 `manifest.json` 注入 `m365.cloud.microsoft`。
-- `src/pages/content/index.tsx` 已把 M365 与 Gemini 功能隔离：当 `location.hostname === 'm365.cloud.microsoft'` 时，只启动 diagnostics 和 M365 chat extractor，然后直接返回。
-- 手动诊断入口：`window.__gvDiagRun()`、`window.__gvDiagClear()`、`window.__gvLastDiagResult`。
+- `src/pages/content/index.tsx` 已把 M365 与 Gemini 功能隔离：当 `location.hostname === 'm365.cloud.microsoft'` 时，只注册手动 diagnostics 和 M365 chat extractor，然后直接返回。
+- 手动诊断入口：`window.__gvDiagRun()`、`window.__gvDiagClear()`、`window.__gvLastDiagResult`；默认不会自动扫描、标记页面或保存 DOM 摘要。
 - 手动提取入口：`window.__gvExtract()` 返回兼容旧调试结果；`window.__gvExtractCanonical()` 返回 canonical model。
 - 真实 Edge/CDP 验证确认：content script API 位于名为 `Voyager` 的 isolated world。
 - 2026-04-26 的真实 M365 DOM 证据显示：`20` 个 raw user nodes、`40` 个 raw assistant nodes、`10` 个 article nodes、`10` 条 logical messages。
 - 自动化测试已覆盖：嵌套节点不重复、空 user 过滤、assistant 快照去重、多段 assistant 顺序、正文容器优先、chrome/feedback 清理、兼容 facade、image-only message、小 icon 过滤、fallback article、canonical id 稳定性。
-- Diagnostics 标框已改为优先标记真实 M365 message article，避免 breadcrumb/list 抢占 `msg[]` 标记名额。
-- 2026-04-28 已在 Windows 本地开发环境验证：`npm.cmd` 测试/构建可用，Edge 加载 `L:\project\dist_chrome` 后 M365 页面可显示 diagnostics 标框，并且 `Voyager` isolated world 中存在 `window.__gvExtract()` / `window.__gvExtractCanonical()`。
+- 手动运行 Diagnostics 时，标框优先标记真实 M365 message article，避免 breadcrumb/list 抢占 `msg[]` 标记名额。
+- 2026-04-28 已在 Windows 本地开发环境验证：`npm.cmd` 测试/构建可用，Edge 加载 `L:\project\dist_chrome` 后，`Voyager` isolated world 中存在 `window.__gvDiagRun()` / `window.__gvExtract()` / `window.__gvExtractCanonical()`。
 - `M365ExportService` 已提供只读 export adapter：从 `CanonicalConversation` 生成现有 `ChatTurn[]` 和 `ConversationMetadata`，支持 plain text 与安全图片 Markdown，但尚未接入 M365 export UI。
 
 ## 已吸收的计划归档
@@ -38,7 +38,7 @@ Plan 2：canonical baseline 收口与自动测试
 - Windows 当前主路径是 `L:\project`；验证优先使用 `npm.cmd`。WSL/Bun 命令只作为历史参考。
 - 如果沙箱内 Vite/Vitest 遇到 `esbuild spawn EPERM`，在提升后的真实 Windows 环境重跑同一条 `npm.cmd` 命令。
 - `AGENTS.md` 已从历史 Windows symlink/reparse point 问题收口为可正常 hash/diff 的 repo 文件。
-- M365 diagnostics 仍只是临时诊断模块，不进入业务数据流。
+- M365 diagnostics 仍只是临时诊断模块，不进入业务数据流；生产入口只注册手动 console helpers，不自动运行。
 
 Plan 3：M365 export adapter baseline
 
@@ -47,7 +47,7 @@ Plan 3：M365 export adapter baseline
 - user message 开启新 turn；后续 assistant 归入当前 turn；连续 assistant 用空行合并；assistant-only 和 user-only turn 都保留。
 - `starred` 固定为 `false`，`omitEmptySections` 固定为 `true`。
 - 不向现有 export service 传入 M365 `userElement` / `assistantElement`，避免 Gemini 专用 `DOMContentExtractor` 误读 M365 DOM。
-- canonical 图片转换为安全 Markdown 图片行；只允许 `http:`、`https:`、`blob:`、`data:image/` 来源，其余丢弃。
+- canonical 图片转换为安全 Markdown 图片行；只允许 `http:`、`https:`、`blob:` 和不超过 `1_048_576` 字符的 `data:image/png|jpeg|webp|gif;base64,...` 来源，其余丢弃。
 
 ## 迁移目标
 
@@ -131,7 +131,7 @@ Fallback 识别：
 
 ## 诊断标框规则
 
-`m365Diagnostics.ts` 只用于人工排查，不参与业务数据流。
+`m365Diagnostics.ts` 只用于人工排查，不参与业务数据流。生产入口只注册手动 helpers；除非显式调用 `startM365Diagnostics({ autoRun: true })`，否则不会自动扫描 DOM、注入标框或记录页面摘要。
 
 - `msg[]` 优先标记带有 `fai-UserMessage` / `fai-CopilotMessage` 的最近 `role="article"` 节点。
 - 只有找不到 M365 message class 时，才 fallback 到通用 `[role="article"]`、`[role="log"]`、`[role="feed"]`、`[class*="Message"]` 等候选。
@@ -144,7 +144,7 @@ Conversation export 路线：
 
 - 当前 `M365ExportService.buildTurns()` 已把 `CanonicalMessage` 转换为现有 export turns，不允许直接扫描 M365 DOM。
 - 当前 `M365ExportService.buildExportInput()` 已生成 `{ turns, metadata }`，metadata 来自 canonical `url` / `timestamp`，默认标题为 `M365 Copilot`。
-- 图片会转换为 Markdown image 语法；只允许 `http:`、`https:`、`blob:`、`data:image/` 来源，其余 URL 会被过滤。
+- 图片会转换为 Markdown image 语法；只允许 `http:`、`https:`、`blob:` 和不超过 `1_048_576` 字符的 `data:image/png|jpeg|webp|gif;base64,...` 来源，其余 URL 会被过滤。
 - 当前仍未添加 M365 export UI；只有当 adapter 在更多真实对话上稳定后，才添加入口。
 - 优先保留 JSON 和 Markdown；PDF/Image 等富内容处理验证后再复用现有 export services。
 
@@ -169,8 +169,8 @@ Wider UI 路线：
 1. 在 Windows PowerShell 中运行 `npm.cmd run build:chrome`。
 2. 在 Edge 扩展页 `edge://extensions/` 加载或 reload `L:\project\dist_chrome`。
 3. 打开或刷新 `https://m365.cloud.microsoft/chat`。
-4. Diagnostics 标框应显示 `msg[]`、`nav[]`、`editable[]` 等标签。
-5. 使用 CDP 时，选择 `name === "Voyager"` 的 isolated world，再调用 `window.__gvExtract()` 或 `window.__gvExtractCanonical()`。
+4. 默认不显示 diagnostics 标框；需要排查 DOM 时，在 `Voyager` isolated world 手动调用 `window.__gvDiagRun()`，此时标框应显示 `msg[]`、`nav[]`、`editable[]` 等标签。
+5. 使用 CDP 时，选择 `name === "Voyager"` 的 isolated world，再调用 `window.__gvDiagRun()`、`window.__gvExtract()` 或 `window.__gvExtractCanonical()`。
 
 注意：重新 `build:chrome` 后必须在 `edge://extensions/` 对 unpacked extension 点一次 reload。只刷新 M365 页面可能仍使用旧 manifest 中登记的旧 hashed content script 路径，导致 `window.__gvDiagRun` / `window.__gvExtractCanonical` 不存在。
 
@@ -260,7 +260,7 @@ Windows 环境注意事项：
 2. 增加从 `CanonicalConversation` 到现有 export service inputs 的只读 export adapter。
 3. 从 `CanonicalMessage` 生成 timeline markers，不引入新的 DOM selectors。
 4. 增加 M365 layout enhancer，只使用 CSS 和必要的 canonical anchors。
-5. 生产发布前 gate 或移除 diagnostics。
+5. 生产入口保持 diagnostics 手动 gate；未来可删除临时 diagnostics 模块。
 
 ## 更新协议
 

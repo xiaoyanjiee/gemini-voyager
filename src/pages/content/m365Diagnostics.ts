@@ -17,6 +17,10 @@ const M365_MESSAGE_CLASS_SELECTOR = '[class*="fai-UserMessage"], [class*="fai-Co
 const MESSAGE_ARTICLE_SELECTOR = '[role="article"]';
 const MAX_MESSAGE_MARKERS = 12;
 
+interface StartM365DiagnosticsOptions {
+  autoRun?: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Result types
 // ---------------------------------------------------------------------------
@@ -482,15 +486,15 @@ function isVisible(el: Element): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * 启动 M365 诊断。
- * 会等页面加载完成后自动运行一次，并把 __gvDiagRun / __gvDiagClear 挂到 window 上供手动调用。
+ * Register manual M365 diagnostics helpers.
+ *
+ * Auto-run is opt-in so production M365 pages are not scanned or visually marked
+ * unless a developer explicitly requests it.
  */
-export function startM365Diagnostics(): void {
-  console.log(`${TAG} M365 诊断模块已加载，等待页面就绪...`);
+export function startM365Diagnostics(options: StartM365DiagnosticsOptions = {}): void {
+  const { autoRun = false } = options;
+  console.log(`${TAG} M365 diagnostics loaded in manual mode.`);
 
-  injectMarkerStyles();
-
-  // 挂载到 window 上方便手动调用
   (window as unknown as Record<string, unknown>).__gvDiagRun = () => {
     clearAllMarkers();
     injectMarkerStyles();
@@ -504,9 +508,15 @@ export function startM365Diagnostics(): void {
     console.log(`${TAG} 所有诊断标记已清除，__gvLastDiagResult 已重置`);
   };
 
-  // M365 是 SPA，DOM 会动态加载，等几秒再跑
+  (window as unknown as Record<string, unknown>).__gvLastDiagResult = null;
+
+  if (!autoRun) {
+    console.log(`${TAG} Run window.__gvDiagRun() manually to inspect the current page.`);
+    return;
+  }
+
   const RUN_DELAY_MS = 10000;
-  console.log(`${TAG} 将在 ${RUN_DELAY_MS / 1000} 秒后自动运行诊断（等待 SPA 渲染）...`);
+  console.log(`${TAG} Auto-run enabled. Diagnostics will run in ${RUN_DELAY_MS / 1000} seconds.`);
   setTimeout(() => {
     const result = runDiagnostics();
     (window as unknown as Record<string, unknown>).__gvLastDiagResult = result;

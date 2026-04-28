@@ -205,6 +205,7 @@ describe('M365ExportService', () => {
   });
 
   it('filters unsafe image URLs from export text', () => {
+    const oversizedDataUrl = `data:image/png;base64,${'a'.repeat(1_048_576)}`;
     const conversation = createConversation([
       createMessage(
         'assistant',
@@ -212,6 +213,8 @@ describe('M365ExportService', () => {
           createImage({ src: 'javascript:alert(1)', alt: 'bad' }),
           createImage({ src: 'https://example.test/good.png', alt: 'good' }),
           createImage({ src: 'data:text/html,<svg/onload=alert(1)>', alt: 'bad data' }),
+          createImage({ src: 'data:image/svg+xml;base64,PHN2Zy8+', alt: 'bad svg' }),
+          createImage({ src: oversizedDataUrl, alt: 'too large' }),
           createImage({ src: 'data:image/png;base64,abc123', alt: 'safe data' }),
         ],
         0,
@@ -223,6 +226,33 @@ describe('M365ExportService', () => {
     expect(turns).toHaveLength(1);
     expect(turns[0].assistant).toBe(
       '![good](https://example.test/good.png)\n\n![safe data](data:image/png;base64,abc123)',
+    );
+  });
+
+  it('keeps allowed base64 data image formats', () => {
+    const conversation = createConversation([
+      createMessage(
+        'assistant',
+        [
+          createImage({ src: 'data:image/png;base64,cG5n', alt: 'png' }),
+          createImage({ src: 'data:image/jpeg;base64,anBlZw==', alt: 'jpeg' }),
+          createImage({ src: 'data:image/webp;base64,d2VicA==', alt: 'webp' }),
+          createImage({ src: 'data:image/gif;base64,Z2lm', alt: 'gif' }),
+        ],
+        0,
+      ),
+    ]);
+
+    const turns = M365ExportService.buildTurns(conversation);
+
+    expect(turns).toHaveLength(1);
+    expect(turns[0].assistant).toBe(
+      [
+        '![png](data:image/png;base64,cG5n)',
+        '![jpeg](data:image/jpeg;base64,anBlZw==)',
+        '![webp](data:image/webp;base64,d2VicA==)',
+        '![gif](data:image/gif;base64,Z2lm)',
+      ].join('\n\n'),
     );
   });
 });

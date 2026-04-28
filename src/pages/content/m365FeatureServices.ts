@@ -18,6 +18,9 @@ interface M365DraftTurn {
   assistantParts: string[];
 }
 
+const MAX_DATA_IMAGE_URL_LENGTH = 1_048_576;
+const SAFE_DATA_IMAGE_URL_PATTERN = /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/i;
+
 export interface M365TimelineIndexItem {
   id: string;
   index: number;
@@ -111,8 +114,12 @@ export class M365ExportService {
     const url = (image.currentSrc || image.src).trim();
     if (!url || /[\s\p{C})]/u.test(url)) return '';
 
-    if (url.startsWith('blob:') || url.startsWith('data:image/')) {
+    if (url.startsWith('blob:')) {
       return url;
+    }
+
+    if (url.startsWith('data:image/')) {
+      return this.isSafeDataImageUrl(url) ? url : '';
     }
 
     try {
@@ -121,6 +128,10 @@ export class M365ExportService {
     } catch {
       return '';
     }
+  }
+
+  private static isSafeDataImageUrl(url: string): boolean {
+    return url.length <= MAX_DATA_IMAGE_URL_LENGTH && SAFE_DATA_IMAGE_URL_PATTERN.test(url);
   }
 
   private static escapeMarkdownAlt(value: string): string {

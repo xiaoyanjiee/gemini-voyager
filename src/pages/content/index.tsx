@@ -168,9 +168,11 @@ async function initializeFeatures(): Promise<void> {
       return;
     }
 
-    // M365 Copilot: 只运行临时诊断，不启动任何 Gemini 功能
+    // M365 Copilot: register manual diagnostics/extractor only; do not start Gemini features.
     if (location.hostname === 'm365.cloud.microsoft') {
-      console.log('[Gemini Voyager] M365 Copilot detected, starting diagnostics + chat extractor');
+      console.log(
+        '[Gemini Voyager] M365 Copilot detected, starting manual diagnostics + chat extractor',
+      );
       startM365Diagnostics();
       startM365ChatExtractor();
       return;
