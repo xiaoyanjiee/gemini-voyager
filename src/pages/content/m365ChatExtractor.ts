@@ -36,6 +36,11 @@ interface M365JsonDebugExportResult {
   payload: ReturnType<typeof M365ExportService.buildJsonExport>;
 }
 
+interface M365MarkdownDebugExportResult {
+  filename: string;
+  markdown: string;
+}
+
 export function extractM365CanonicalConversation(): CanonicalConversation {
   const rawConversation = M365ConversationExtractor.extract();
   return CanonicalConversationBuilder.build(rawConversation);
@@ -97,13 +102,13 @@ function getM365ExportTitle(): string {
   return document.title.trim() || DEFAULT_M365_EXPORT_TITLE;
 }
 
-function buildM365JsonFilename(timestamp: string): string {
+function buildM365ExportFilename(timestamp: string, extension: 'json' | 'md'): string {
   const safeTimestamp = timestamp.replace(/[:.]/g, '-');
-  return `m365-copilot-${safeTimestamp}.json`;
+  return `m365-copilot-${safeTimestamp}.${extension}`;
 }
 
-function downloadJson(json: string, filename: string): void {
-  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+function downloadText(content: string, filename: string, type: string): void {
+  const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -125,8 +130,8 @@ function exportM365JsonForDebug(): M365JsonDebugExportResult {
   const title = getM365ExportTitle();
   const payload = M365ExportService.buildJsonExport(conversation, title);
   const json = M365ExportService.serializeJsonExport(conversation, title);
-  const filename = buildM365JsonFilename(payload.exportedAt);
-  downloadJson(json, filename);
+  const filename = buildM365ExportFilename(payload.exportedAt, 'json');
+  downloadText(json, filename, 'application/json;charset=utf-8');
 
   const result = { filename, json, payload };
   (window as unknown as Record<string, unknown>).__gvLastM365JsonExport = result;
@@ -134,9 +139,22 @@ function exportM365JsonForDebug(): M365JsonDebugExportResult {
   return result;
 }
 
+function exportM365MarkdownForDebug(): M365MarkdownDebugExportResult {
+  const conversation = extractM365CanonicalConversation();
+  const title = getM365ExportTitle();
+  const markdown = M365ExportService.serializeMarkdownExport(conversation, title);
+  const filename = buildM365ExportFilename(conversation.timestamp, 'md');
+  downloadText(markdown, filename, 'text/markdown;charset=utf-8');
+
+  const result = { filename, markdown };
+  (window as unknown as Record<string, unknown>).__gvLastM365MarkdownExport = result;
+  console.log(`${TAG} M365 Markdown debug export downloaded as ${filename}.`);
+  return result;
+}
+
 export function startM365ChatExtractor(): void {
   console.log(
-    `${TAG} Chat extractor loaded. Run window.__gvExtract() to extract current conversation. M365 JSON debug/dev only: window.__gvExportM365Json().`,
+    `${TAG} Chat extractor loaded. Run window.__gvExtract() to extract current conversation. M365 debug/dev only exports: window.__gvExportM365Json(), window.__gvExportM365Markdown().`,
   );
 
   (window as unknown as Record<string, unknown>).__gvExtract = () => {
@@ -154,7 +172,11 @@ export function startM365ChatExtractor(): void {
   (window as unknown as Record<string, unknown>).__gvExportM365Json = () =>
     exportM365JsonForDebug();
 
+  (window as unknown as Record<string, unknown>).__gvExportM365Markdown = () =>
+    exportM365MarkdownForDebug();
+
   (window as unknown as Record<string, unknown>).__gvLastExtractResult = null;
   (window as unknown as Record<string, unknown>).__gvLastCanonicalConversation = null;
   (window as unknown as Record<string, unknown>).__gvLastM365JsonExport = null;
+  (window as unknown as Record<string, unknown>).__gvLastM365MarkdownExport = null;
 }

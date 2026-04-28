@@ -276,6 +276,63 @@ describe('M365ExportService', () => {
     expect(serialized).not.toContain('Node');
   });
 
+  it('serializes Markdown export metadata and normal user-assistant turns', () => {
+    const conversation = createConversation([
+      createMessage('user', [{ kind: 'text', text: 'Summarize the launch plan' }], 0),
+      createMessage('assistant', [{ kind: 'text', text: 'Launch summary' }], 1),
+    ]);
+
+    const markdown = M365ExportService.serializeMarkdownExport(conversation, 'Launch chat');
+
+    expect(markdown).toContain('# Launch chat');
+    expect(markdown).toContain('- platform: M365 Copilot');
+    expect(markdown).toContain('- url: https://m365.cloud.microsoft/chat');
+    expect(markdown).toContain('- exportedAt: 2026-04-28T04:00:00.000Z');
+    expect(markdown).toContain('- count: 1');
+    expect(markdown).toContain('## Turn 1');
+    expect(markdown).toContain('### User\n\nSummarize the launch plan');
+    expect(markdown).toContain('### Assistant\n\nLaunch summary');
+    expect(markdown).not.toContain('undefined');
+    expect(markdown).not.toContain('null');
+  });
+
+  it('serializes Markdown assistant-only, user-only, and image-only turns', () => {
+    const conversation = createConversation([
+      createMessage('assistant', [createImage({ alt: 'Only chart' })], 0),
+      createMessage('user', [{ kind: 'text', text: 'Only prompt' }], 1),
+      createMessage('user', [{ kind: 'text', text: 'Prompt with answer' }], 2),
+      createMessage('assistant', [{ kind: 'text', text: 'Answer text' }], 3),
+    ]);
+
+    const markdown = M365ExportService.buildMarkdownExport(conversation);
+
+    expect(markdown).toContain(
+      '## Turn 1\n\n### Assistant\n\n![Only chart](https://example.test/image.png)',
+    );
+    expect(markdown).not.toContain('## Turn 1\n\n### User');
+    expect(markdown).toContain('## Turn 2\n\n### User\n\nOnly prompt');
+    expect(markdown).not.toContain('## Turn 2\n\n### User\n\nOnly prompt\n\n### Assistant');
+    expect(markdown).toContain(
+      '## Turn 3\n\n### User\n\nPrompt with answer\n\n### Assistant\n\nAnswer text',
+    );
+  });
+
+  it('does not serialize canonical DOM elements into Markdown export', () => {
+    const conversation = createConversation([
+      createMessage('user', [{ kind: 'text', text: 'Prompt' }], 0),
+      createMessage('assistant', [{ kind: 'text', text: 'Answer' }], 1),
+    ]);
+
+    const markdown = M365ExportService.serializeMarkdownExport(conversation);
+
+    expect(markdown).not.toContain('sourceElement');
+    expect(markdown).not.toContain('contentElement');
+    expect(markdown).not.toContain('userElement');
+    expect(markdown).not.toContain('assistantElement');
+    expect(markdown).not.toContain('HTMLElement');
+    expect(markdown).not.toContain('Node');
+  });
+
   it('uses the default M365 title when one is not provided', () => {
     const conversation = createConversation([
       createMessage('assistant', [{ kind: 'text', text: 'Answer' }], 0),

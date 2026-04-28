@@ -36,6 +36,7 @@ export interface M365JsonExportPayload {
 
 const DEFAULT_M365_EXPORT_TITLE = 'M365 Copilot';
 const M365_JSON_PLATFORM = 'm365-copilot';
+const M365_MARKDOWN_PLATFORM_LABEL = 'M365 Copilot';
 const MAX_DATA_IMAGE_URL_LENGTH = 1_048_576;
 const SAFE_DATA_IMAGE_URL_PATTERN = /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/i;
 
@@ -124,6 +125,40 @@ export class M365ExportService {
     return JSON.stringify(this.buildJsonExport(conversation, title), null, 2);
   }
 
+  static buildMarkdownExport(conversation: CanonicalConversation, title?: string): string {
+    const input = this.buildExportInput(conversation, title);
+    const exportTitle =
+      this.normalizeMarkdownMetadataValue(input.metadata.title) || DEFAULT_M365_EXPORT_TITLE;
+    const lines = [
+      `# ${exportTitle}`,
+      '',
+      `- platform: ${M365_MARKDOWN_PLATFORM_LABEL}`,
+      `- url: ${this.normalizeMarkdownMetadataValue(input.metadata.url)}`,
+      `- exportedAt: ${this.normalizeMarkdownMetadataValue(input.metadata.exportedAt)}`,
+      `- count: ${input.metadata.count}`,
+    ];
+
+    input.turns.forEach((turn, index) => {
+      const user = this.normalizeMarkdownBody(turn.user);
+      const assistant = this.normalizeMarkdownBody(turn.assistant);
+      lines.push('', `## Turn ${index + 1}`);
+
+      if (user) {
+        lines.push('', '### User', '', user);
+      }
+
+      if (assistant) {
+        lines.push('', '### Assistant', '', assistant);
+      }
+    });
+
+    return `${lines.join('\n').trimEnd()}\n`;
+  }
+
+  static serializeMarkdownExport(conversation: CanonicalConversation, title?: string): string {
+    return this.buildMarkdownExport(conversation, title);
+  }
+
   private static toExportText(message: CanonicalMessage): string {
     const parts = message.content
       .map((item) => this.contentItemToMarkdown(item))
@@ -181,6 +216,17 @@ export class M365ExportService {
       .replace(/[\r\n]+/g, ' ')
       .replace(/[[\]\\]/g, '\\$&')
       .trim();
+  }
+
+  private static normalizeMarkdownBody(value: string | null | undefined): string {
+    return (value ?? '')
+      .replace(/\r\n?/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  private static normalizeMarkdownMetadataValue(value: string | null | undefined): string {
+    return (value ?? '').replace(/\r\n?/g, '\n').replace(/\n+/g, ' ').trim();
   }
 }
 
