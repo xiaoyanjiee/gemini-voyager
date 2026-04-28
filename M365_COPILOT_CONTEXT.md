@@ -5,6 +5,7 @@
 目标站点：`https://m365.cloud.microsoft/*`
 
 这是后续 Codex 会话的交接文档。修改 M365 专用代码前，必须先阅读本文件。
+桌面上的历史 `PLAN.md` / `PLAN2.md` 以及 M365 export adapter 计划已吸收到本文档；新会话不需要再导入这三份 plan。
 
 ## 当前已完成功能
 
@@ -18,6 +19,35 @@
 - Diagnostics 标框已改为优先标记真实 M365 message article，避免 breadcrumb/list 抢占 `msg[]` 标记名额。
 - 2026-04-28 已在 Windows 本地开发环境验证：`npm.cmd` 测试/构建可用，Edge 加载 `L:\project\dist_chrome` 后 M365 页面可显示 diagnostics 标框，并且 `Voyager` isolated world 中存在 `window.__gvExtract()` / `window.__gvExtractCanonical()`。
 - `M365ExportService` 已提供只读 export adapter：从 `CanonicalConversation` 生成现有 `ChatTurn[]` 和 `ConversationMetadata`，支持 plain text 与安全图片 Markdown，但尚未接入 M365 export UI。
+
+## 已吸收的计划归档
+
+本节是历史计划的压缩事实来源，避免后续会话重新导入桌面 plan。
+
+Plan 1：M365 canonical conversation baseline
+
+- 目标是建立 M365 原生消息模型，不复制 Gemini selectors，也不让 export / timeline / chatWidth 各自扫描 DOM。
+- `m365ChatExtractor.ts` 保留 `startM365ChatExtractor()` / `extractM365Messages()` / `window.__gvExtract()` 兼容调试入口。
+- 以 `M365ConversationExtractor` 负责 raw DOM candidates，以 `CanonicalConversationBuilder` 负责排序、过滤、去重、fingerprint、稳定 id 和统计。
+- `CanonicalConversation` / `CanonicalMessage` 是 export、timeline、layout 的唯一上游索引。
+- 本阶段不启动 M365 export / timeline / chatWidth UI，不修改 Gemini 行为。
+
+Plan 2：canonical baseline 收口与自动测试
+
+- 目标是修复验证与提交阻塞，而不是开始 M365 UI 接入。
+- Windows 当前主路径是 `L:\project`；验证优先使用 `npm.cmd`。WSL/Bun 命令只作为历史参考。
+- 如果沙箱内 Vite/Vitest 遇到 `esbuild spawn EPERM`，在提升后的真实 Windows 环境重跑同一条 `npm.cmd` 命令。
+- `AGENTS.md` 已从历史 Windows symlink/reparse point 问题收口为可正常 hash/diff 的 repo 文件。
+- M365 diagnostics 仍只是临时诊断模块，不进入业务数据流。
+
+Plan 3：M365 export adapter baseline
+
+- 目标是增加从 `CanonicalConversation` 到现有 export 输入的只读 adapter，不接 M365 export UI。
+- `M365ExportService.buildTurns(conversation)` 生成现有 `ChatTurn[]`；`buildExportInput(conversation, title?)` 生成 `{ turns, metadata }`。
+- user message 开启新 turn；后续 assistant 归入当前 turn；连续 assistant 用空行合并；assistant-only 和 user-only turn 都保留。
+- `starred` 固定为 `false`，`omitEmptySections` 固定为 `true`。
+- 不向现有 export service 传入 M365 `userElement` / `assistantElement`，避免 Gemini 专用 `DOMContentExtractor` 误读 M365 DOM。
+- canonical 图片转换为安全 Markdown 图片行；只允许 `http:`、`https:`、`blob:`、`data:image/` 来源，其余丢弃。
 
 ## 迁移目标
 
