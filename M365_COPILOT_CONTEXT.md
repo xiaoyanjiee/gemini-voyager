@@ -52,6 +52,18 @@ Plan 3：M365 export adapter baseline
 - M365 JSON payload 顶层包含 `platform: "m365-copilot"`、`title`、`url`、`exportedAt`、`count`、`turns`；每个 turn 只包含 `user`、`assistant`、`starred`、`omitEmptySections`，不包含 DOM elements。
 - canonical 图片转换为安全 Markdown 图片行；只允许 `http:`、`https:`、`blob:` 和不超过 `1_048_576` 字符的 `data:image/png|jpeg|webp|gif;base64,...` 来源，其余丢弃。
 
+Plan 4：M365 JSON export MVP
+
+- 目标是在 `M365ExportService.buildExportInput(conversation, title?)` 之上实现最小可用 JSON 导出底层能力。
+- 范围只包含 JSON：暂不做 Markdown、PDF、Image export、完整导出 UI、timeline、chatWidth，也不修改 Gemini 现有导出逻辑。
+- 新增 `buildJsonExport(conversation, title?)` 和 `serializeJsonExport(conversation, title?)`，生成稳定、可 `JSON.parse` 的纯数据 JSON。
+- JSON 顶层必须包含 `platform: "m365-copilot"`、`title`、`url`、`exportedAt`、`count`、`turns`；turn 只保留 `user`、`assistant`、`starred`、`omitEmptySections`。
+- 不把 `Element`、`HTMLElement`、`Node`、`sourceElement`、`contentElement`、`userElement`、`assistantElement` 写入 JSON。
+- 图片先保持 adapter 产出的安全 Markdown image line，不额外下载图片。
+- 允许保留 `window.__gvExportM365Json()` 作为 M365 debug/dev only 本地真机验证入口；它不是最终 UI。
+- 测试必须覆盖 JSON 可解析、metadata、user/assistant 内容、assistant-only、user-only、image-only、DOM object 不外泄，并确认 Gemini export 不受影响。
+- 文档必须记录 JSON MVP 已具备底层导出能力，但正式 UI 仍待接入。
+
 ## 迁移目标
 
 M365 adapter 需要迁移 Gemini Voyager 的三项能力，但三者必须共享同一个 M365 原生 conversation index：
@@ -281,13 +293,15 @@ Windows 环境注意事项：
 - 当前优先级或延期范围。
 - M365 相关文件。
 - 测试/构建命令。
+- 新任务的 plan 内容、执行后的实际范围、验收标准或延期项。
 
 更新时：
 
 1. 修改“最后更新”日期。
 2. 修改对应章节，不要零散追加无上下文 notes。
 3. selector 变化必须包含准确的 class/role 证据。
-4. 把本文件视为后续 Codex 会话的事实来源。
+4. 如果本次任务有明确 plan，必须把 plan 的目标、范围、关键接口、测试要求和延期项压缩吸收到本文件与 `M365_CHANGELOG.md`，避免后续 Codex 只看到实现结果而看不到设计意图。
+5. 把本文件视为后续 Codex 会话的事实来源。
 
 ## 2026-04-28 当前进度同步
 
@@ -301,6 +315,7 @@ Windows 环境注意事项：
 - 桌面 `PLAN2.md`：canonical baseline 收口与自动化测试。
 - 桌面 `PLAN3.md`：M365 export adapter baseline。
 - 2026-04-28 修复计划：diagnostics 手动 gate 与 image URL 安全收口。
+- 2026-04-28 M365 JSON Export MVP plan：基于 `M365ExportService` 增加 JSON serializer 和 M365 debug/dev only 导出入口，不接正式 UI，不触碰 Gemini export。
 
 当前项目状态：
 
@@ -326,5 +341,6 @@ git diff --check
 后续更新规则：
 
 - 如果 M365 selectors、canonical model、extractor output、export adapter、安全策略、真实浏览器验证流程、迁移优先级或测试命令发生变化，必须同时更新本文件和 `M365_CHANGELOG.md`。
+- 如果后续任务有独立 plan 或 Codex 先产出 `<proposed_plan>`，完成任务时必须把 plan 摘要和实际偏差同步进本文件和 `M365_CHANGELOG.md`。
 - 本文件写简洁事实；`M365_CHANGELOG.md` 写详细原因、影响、验证和下一步。
 - 后续提交时继续注意当前工作区可能存在无关 staged 文件，必要时使用显式 pathspec 提交。

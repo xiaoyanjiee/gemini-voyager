@@ -14,14 +14,15 @@
 
 ## 计划来源
 
-本阶段吸收了桌面上的三份历史 plan 以及 2026-04-28 的修复 plan：
+本阶段吸收了桌面上的三份历史 plan、2026-04-28 的修复 plan，以及 M365 JSON Export MVP plan：
 
 - `PLAN.md`：建立 M365 原生 canonical conversation baseline，不复制 Gemini selectors，不让 export / timeline / chatWidth 各自扫描 M365 DOM。
 - `PLAN2.md`：收口 canonical baseline、恢复验证环境、修复 Windows checkout/AGENTS 阻塞，并确认 diagnostics 只是临时诊断模块。
 - `PLAN3.md`：建立从 `CanonicalConversation` 到现有 export 输入的只读 adapter，不接入 M365 export UI。
 - 2026-04-28 修复 plan：把 M365 diagnostics 从默认自动运行改为手动入口，并收紧 `data:image` Markdown 输出安全边界。
+- M365 JSON Export MVP plan：基于 `M365ExportService.buildExportInput(conversation, title?)` 增加 JSON serializer 和 M365 debug/dev only 导出入口，只做 JSON MVP，不做正式 UI，不改 Gemini export。
 
-这些 plan 的稳定事实已经同步进 `M365_COPILOT_CONTEXT.md`。后续不要重新导入桌面 plan 作为新的事实源；如需查细节，以本文件和上下文文档为准。
+这些 plan 的稳定事实已经同步进 `M365_COPILOT_CONTEXT.md`。后续不要重新导入桌面 plan 作为新的事实源；如需查细节，以本文件和上下文文档为准。后续 Codex 如果先产出或收到新的 plan，完成任务时也必须把 plan 摘要、实际落地范围、延期项和验证结果合并进这两个文档。
 
 ## 当前项目进度
 
@@ -109,6 +110,19 @@
 
 目标是在不接入正式 UI、不调用 Gemini DOM extractor 的前提下，让 M365 canonical conversation 可以生成稳定 JSON。
 
+Plan 内容：
+
+- 在 `M365ExportService.buildExportInput(conversation, title?)` 之上实现 JSON MVP。
+- 只做 JSON，不做 Markdown、PDF、Image export、完整导出 UI、timeline 或 chatWidth。
+- 不重新扫描 M365 DOM，不复制 Gemini selectors，不修改 Gemini 现有导出逻辑。
+- 新增 `buildJsonExport(conversation, title?)` 和 `serializeJsonExport(conversation, title?)`。
+- JSON 顶层至少包含 `platform: "m365-copilot"`、`title`、`url`、`exportedAt`、`count`、`turns`。
+- 每个 turn 只包含 `user`、`assistant`、`starred`、`omitEmptySections`。
+- 不把 `Element`、`HTMLElement`、`Node`、`sourceElement`、`contentElement`、`userElement`、`assistantElement` 写入 JSON。
+- 图片先保持当前 adapter 产出的安全 Markdown 图片行，不额外下载图片。
+- 允许保留 `window.__gvExportM365Json()` 作为 M365 debug/dev only 本地验证入口，不作为最终 UI。
+- 测试覆盖 JSON 可解析、metadata、turn 内容、assistant-only、user-only、image-only、DOM object 不外泄，并确认 Gemini export 不受影响。
+
 已完成：
 
 - `M365ExportService.buildJsonExport(conversation, title?)` 生成纯 JSON-safe payload。
@@ -191,6 +205,7 @@ git diff --check
 - 不新增 M365 UI，除非任务明确要求。
 - 不改变 Gemini 现有行为。
 - 更新 M365 selectors、canonical shape、extractor output、安全策略、测试命令或真实浏览器验证流程时，必须同时更新 `M365_COPILOT_CONTEXT.md` 和本文件。
+- 新任务如果有明确 plan，必须把 plan 的目标、范围、关键接口、测试要求、延期项和最终验证结果合并进 `M365_COPILOT_CONTEXT.md` 和本文件；不要只记录代码结果。
 - 每次任务完成后按项目规则提交 Git；如果工作区已有无关 staged 文件，提交时必须使用显式 pathspec 避免误带。
 
 ## 下一步建议
@@ -217,3 +232,10 @@ git diff --check
 
 - `M365_COPILOT_CONTEXT.md`：写压缩事实和当前状态。
 - `M365_CHANGELOG.md`：写详细变更、原因、验证、风险和下一步。
+
+如果你先写了 plan 或收到用户给出的 plan，请在实现完成后同步：
+
+- plan 原始目标和明确不做的范围。
+- 实际落地的接口、入口和行为。
+- 测试与验收覆盖。
+- 没有落地、仍延期或需要未来 UI 接入的部分。
