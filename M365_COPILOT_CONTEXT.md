@@ -210,7 +210,7 @@ Windows 主要命令：
 npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts
 npm.cmd run typecheck
 npm.cmd exec -- eslint src/pages/content/m365*.ts src/pages/content/m365*.test.ts
-npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md
+npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md M365_CHANGELOG.md
 npm.cmd run build:chrome
 ```
 
@@ -281,3 +281,42 @@ Windows 环境注意事项：
 2. 修改对应章节，不要零散追加无上下文 notes。
 3. selector 变化必须包含准确的 class/role 证据。
 4. 把本文件视为后续 Codex 会话的事实来源。
+
+## 2026-04-28 当前进度同步
+
+配套详细变更文档：`M365_CHANGELOG.md`。
+
+后续 Codex 修改 M365 相关代码前，必须同时阅读本文件和 `M365_CHANGELOG.md`。本文件记录压缩事实、当前架构边界和验证命令；`M365_CHANGELOG.md` 记录更详细的计划来源、阶段变更、风险原因、验证结果和下一步建议。
+
+当前已同步的计划来源：
+
+- 桌面 `PLAN.md`：M365 canonical conversation baseline。
+- 桌面 `PLAN2.md`：canonical baseline 收口与自动化测试。
+- 桌面 `PLAN3.md`：M365 export adapter baseline。
+- 2026-04-28 修复计划：diagnostics 手动 gate 与 image URL 安全收口。
+
+当前项目状态：
+
+- 分支 `m365-probe` 已包含提交 `09580fc fix(m365): gate diagnostics and tighten image URLs`。
+- M365 页面只注册手动 diagnostics 和 chat extractor，不启动 Gemini 功能。
+- Diagnostics 默认不会自动扫描 DOM、注入 marker、记录 URL/DOM/text 摘要；人工排查时使用 `window.__gvDiagRun()`。
+- `window.__gvExtract()` 和 `window.__gvExtractCanonical()` 仍是当前 M365 提取调试入口。
+- `M365ExportService` 已提供只读 adapter，可从 `CanonicalConversation` 生成 `ChatTurn[]` 和 metadata，但仍未接入 M365 export UI。
+- Markdown image URL 只允许 `http:`、`https:`、`blob:` 和不超过 `1_048_576` 字符的 `data:image/png|jpeg|webp|gif;base64,...`。
+
+最近一次验证通过：
+
+```powershell
+npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts
+npm.cmd run typecheck
+npm.cmd exec -- eslint src/pages/content/m365*.ts src/pages/content/m365*.test.ts
+npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md
+npm.cmd run build:chrome
+git diff --check
+```
+
+后续更新规则：
+
+- 如果 M365 selectors、canonical model、extractor output、export adapter、安全策略、真实浏览器验证流程、迁移优先级或测试命令发生变化，必须同时更新本文件和 `M365_CHANGELOG.md`。
+- 本文件写简洁事实；`M365_CHANGELOG.md` 写详细原因、影响、验证和下一步。
+- 后续提交时继续注意当前工作区可能存在无关 staged 文件，必要时使用显式 pathspec 提交。
