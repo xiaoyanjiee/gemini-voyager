@@ -17,6 +17,7 @@
 - 自动化测试已覆盖：嵌套节点不重复、空 user 过滤、assistant 快照去重、多段 assistant 顺序、正文容器优先、chrome/feedback 清理、兼容 facade、image-only message、小 icon 过滤、fallback article、canonical id 稳定性。
 - Diagnostics 标框已改为优先标记真实 M365 message article，避免 breadcrumb/list 抢占 `msg[]` 标记名额。
 - 2026-04-28 已在 Windows 本地开发环境验证：`npm.cmd` 测试/构建可用，Edge 加载 `L:\project\dist_chrome` 后 M365 页面可显示 diagnostics 标框，并且 `Voyager` isolated world 中存在 `window.__gvExtract()` / `window.__gvExtractCanonical()`。
+- `M365ExportService` 已提供只读 export adapter：从 `CanonicalConversation` 生成现有 `ChatTurn[]` 和 `ConversationMetadata`，支持 plain text 与安全图片 Markdown，但尚未接入 M365 export UI。
 
 ## 迁移目标
 
@@ -43,7 +44,7 @@ M365 adapter 需要迁移 Gemini Voyager 的三项能力，但三者必须共享
 - `src/pages/content/m365ChatExtractor.ts`
   调试 API 的兼容 facade，委托 `M365ConversationExtractor` 和 `CanonicalConversationBuilder` 完成实际工作。
 - `src/pages/content/m365FeatureServices.ts`
-  预留未来 `M365ExportService`、`M365TimelineService`、`M365LayoutEnhancer` 的服务边界；这些服务消费 `CanonicalConversation`，不得重新扫描 DOM。
+  提供 `M365ExportService`、`M365TimelineService`、`M365LayoutEnhancer` 的服务边界；这些服务消费 `CanonicalConversation`，不得重新扫描 DOM。
 - `src/pages/content/m365Diagnostics.ts`
   仅用于临时诊断，不能进入业务数据流。
 
@@ -111,8 +112,10 @@ Fallback 识别：
 
 Conversation export 路线：
 
-- 只有当 `CanonicalConversation` 在更多真实对话上稳定后，才添加 M365 export UI。
-- 把 `CanonicalMessage` 转换为现有 export turns，不允许直接扫描 M365 DOM。
+- 当前 `M365ExportService.buildTurns()` 已把 `CanonicalMessage` 转换为现有 export turns，不允许直接扫描 M365 DOM。
+- 当前 `M365ExportService.buildExportInput()` 已生成 `{ turns, metadata }`，metadata 来自 canonical `url` / `timestamp`，默认标题为 `M365 Copilot`。
+- 图片会转换为 Markdown image 语法；只允许 `http:`、`https:`、`blob:`、`data:image/` 来源，其余 URL 会被过滤。
+- 当前仍未添加 M365 export UI；只有当 adapter 在更多真实对话上稳定后，才添加入口。
 - 优先保留 JSON 和 Markdown；PDF/Image 等富内容处理验证后再复用现有 export services。
 
 Timeline 路线：
@@ -174,7 +177,7 @@ CDP 规则：
 Windows 主要命令：
 
 ```powershell
-npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts
+npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts
 npm.cmd run typecheck
 npm.cmd exec -- eslint src/pages/content/m365*.ts src/pages/content/m365*.test.ts
 npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md
@@ -210,6 +213,8 @@ Windows 环境注意事项：
 - `CanonicalConversation.totalMessages` 匹配真实 logical message count，而不是 raw class-node count。
 - `extractM365Messages()` 必须继续由 canonical 输出驱动。
 - 同一 DOM 状态重复提取时，canonical ids 和 fingerprints 保持稳定。
+- `M365ExportService.buildTurns()` 必须只消费 canonical messages，不能向现有 export service 传入 M365 DOM elements。
+- image-only message 必须能以安全 Markdown 图片行进入 export turns；不安全图片 URL 必须被过滤。
 
 ## 已知缺口
 
