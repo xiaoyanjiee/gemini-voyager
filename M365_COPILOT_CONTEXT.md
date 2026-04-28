@@ -189,6 +189,8 @@ Wider UI 路线：
 3. 打开或刷新 `https://m365.cloud.microsoft/chat`。
 4. 默认不显示 diagnostics 标框；需要排查 DOM 时，在 `Voyager` isolated world 手动调用 `window.__gvDiagRun()`，此时标框应显示 `msg[]`、`nav[]`、`editable[]` 等标签。
 5. 使用 CDP 时，选择 `name === "Voyager"` 的 isolated world，再调用 `window.__gvDiagRun()`、`window.__gvExtract()` 或 `window.__gvExtractCanonical()`。
+6. 验证 M365 JSON export MVP 时，在 `Voyager` isolated world 运行 `window.__gvExportM365Json()`；预期会下载 `m365-copilot-*.json`，并把 `{ filename, json, payload }` 保存到 `window.__gvLastM365JsonExport`。
+7. JSON 验收重点：`JSON.parse(result.json)` 成功；`platform === "m365-copilot"`；`count > 0`；`turns[]` 只包含 `user`、`assistant`、`starred`、`omitEmptySections`；JSON 字符串不包含 `sourceElement`、`contentElement`、`userElement`、`assistantElement`、`HTMLElement`、`Node`。
 
 注意：重新 `build:chrome` 后必须在 `edge://extensions/` 对 unpacked extension 点一次 reload。只刷新 M365 页面可能仍使用旧 manifest 中登记的旧 hashed content script 路径，导致 `window.__gvDiagRun` / `window.__gvExtractCanonical` 不存在。
 
@@ -325,6 +327,7 @@ Windows 环境注意事项：
 - `window.__gvExtract()` 和 `window.__gvExtractCanonical()` 仍是当前 M365 提取调试入口。
 - `M365ExportService` 已提供只读 adapter，可从 `CanonicalConversation` 生成 `ChatTurn[]`、metadata 和 M365 JSON export payload，但仍未接入正式 M365 export UI。
 - `window.__gvExportM365Json()` 是 M365 debug/dev only 本地验证入口，可下载当前 canonical conversation 的 JSON，并保存 `window.__gvLastM365JsonExport`。
+- 2026-04-28 用户已按 `Voyager` isolated world 测试流程实际导出 M365 JSON 文件，并确认文件内容看起来正常；这标记 JSON export MVP 真机手动验收通过。
 - Markdown image URL 只允许 `http:`、`https:`、`blob:` 和不超过 `1_048_576` 字符的 `data:image/png|jpeg|webp|gif;base64,...`。
 
 最近一次验证通过：
@@ -342,5 +345,6 @@ git diff --check
 
 - 如果 M365 selectors、canonical model、extractor output、export adapter、安全策略、真实浏览器验证流程、迁移优先级或测试命令发生变化，必须同时更新本文件和 `M365_CHANGELOG.md`。
 - 如果后续任务有独立 plan 或 Codex 先产出 `<proposed_plan>`，完成任务时必须把 plan 摘要和实际偏差同步进本文件和 `M365_CHANGELOG.md`。
+- 每次开发完成后，后续 Codex 必须把用户当作代码新手，用简明语言解释做了什么、为什么这么做、如何验证；然后和用户一起跑一遍真实测试流程，并根据测试结果更新本文件和 `M365_CHANGELOG.md`。
 - 本文件写简洁事实；`M365_CHANGELOG.md` 写详细原因、影响、验证和下一步。
 - 后续提交时继续注意当前工作区可能存在无关 staged 文件，必要时使用显式 pathspec 提交。

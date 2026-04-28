@@ -188,6 +188,14 @@ git diff --check
 - `build:chrome` 通过。
 - `git diff --check` 通过。
 
+2026-04-28 用户真机手动验证：
+
+- Codex 启动 Windows Edge 测试窗口，加载 `L:\project\dist_chrome`，并开放 CDP 端口 `9225`。
+- 用户在 M365 Copilot 页面按 `Voyager` isolated world 流程运行 `window.__gvExportM365Json()`。
+- JSON 文件已成功导出，用户检查文件内容后确认看起来正常。
+- 该结果表示 M365 JSON export MVP 的本地真机路径已打通：扩展加载、M365 canonical extraction、JSON serialization、debug/dev download helper 都能串起来。
+- 仍未接入正式 M365 export UI；后续 UI 接入需要另行设计和验证。
+
 环境注意：
 
 - 在 Codex sandbox 里，Vitest/Vite 可能因为 `esbuild spawn EPERM` 失败。
@@ -206,6 +214,7 @@ git diff --check
 - 不改变 Gemini 现有行为。
 - 更新 M365 selectors、canonical shape、extractor output、安全策略、测试命令或真实浏览器验证流程时，必须同时更新 `M365_COPILOT_CONTEXT.md` 和本文件。
 - 新任务如果有明确 plan，必须把 plan 的目标、范围、关键接口、测试要求、延期项和最终验证结果合并进 `M365_COPILOT_CONTEXT.md` 和本文件；不要只记录代码结果。
+- 每次开发完成后，后续 Codex 必须把用户当作代码新手：先用简明语言解释本次改动、关键文件和风险点，再陪用户跑一遍可复现的真实测试流程，最后根据测试结果更新 `M365_COPILOT_CONTEXT.md` 和本文件。
 - 每次任务完成后按项目规则提交 Git；如果工作区已有无关 staged 文件，提交时必须使用显式 pathspec 避免误带。
 
 ## 下一步建议
@@ -239,3 +248,9 @@ git diff --check
 - 实际落地的接口、入口和行为。
 - 测试与验收覆盖。
 - 没有落地、仍延期或需要未来 UI 接入的部分。
+
+每次完成开发后，还要主动完成一次“给代码新手的交接”：
+
+- 用几句话解释本次改了什么文件、解决了什么问题、没有做什么。
+- 给出用户能照着做的测试流程，并尽量由 Codex 先完成构建、启动浏览器、准备命令等机器可做部分。
+- 等用户完成必须人工参与的测试后，把真实结果写回 `M365_COPILOT_CONTEXT.md` 和本文件。
