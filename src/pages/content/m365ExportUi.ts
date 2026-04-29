@@ -161,7 +161,7 @@ function ensureM365ExportUiStyle(): void {
 [data-gv-m365-export-ui] {
   position: fixed;
   top: 72px;
-  right: 16px;
+  right: 56px;
   z-index: 2147483646;
   display: flex;
   flex-direction: column;
