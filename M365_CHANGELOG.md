@@ -51,7 +51,7 @@
 - M365 assistant 正文提取会把常见 HTML 结构保留为 Markdown 文本，包括段落空行、粗体、斜体、基础列表、基础链接和 code/pre。
 - `window.__gvExportM365Json()` / `window.__gvExportM365Markdown()` 是仅用于本地验证的 M365 debug/dev 入口，会下载当前页面 JSON / Markdown 并保存对应的 `window.__gvLastM365*Export`。
 - Export adapter 已接入 M365-only 最小 UI，支持 JSON / Markdown；不改变 Gemini export 行为。
-- M365 chatWidth MVP 已接入 M365-only 启动分支：只注入隔离 CSS 和 HTML marker，不读取消息正文、不依赖 canonical/export services、不改变 Gemini chatWidth。
+- M365 chatWidth MVP 已接入 M365-only 启动分支：只注入隔离 CSS 和 HTML marker，不读取消息正文、不依赖 canonical/export services、不改变 Gemini chatWidth；真实页面反馈初版未生效后，已追加外层 `chatMessageContainer...` 包装 div 的宽度覆盖。
 
 ## 阶段变更记录
 
@@ -235,21 +235,22 @@ Plan 内容：
 - 不修改 Gemini chatWidth、Gemini export、Gemini timeline，也不复用 Gemini selectors。
 - 新增 `startM365ChatWidth()`，只在 `index.tsx` 的 `m365.cloud.microsoft` 分支启动。
 - 注入独立 style id `gv-m365-chat-width-style`，使用 HTML marker class `gv-m365-chat-width-enabled`。
-- CSS 只针对 M365 message article / `fai-UserMessage` / `fai-CopilotMessage` 容器，默认固定 wide mode，幂等注入。
+- CSS 只针对 M365 `chatMessageContainer...`、message article、`fai-UserMessage` / `fai-CopilotMessage` 容器，默认固定 wide mode，幂等注入。
 - 不读取消息正文，不依赖 `CanonicalConversation` 或 `M365ExportService`，不改变 M365 消息提取逻辑。
 
 已完成：
 
 - 新增 `src/pages/content/m365ChatWidth.ts`，暴露 `startM365ChatWidth()` 和 `stopM365ChatWidth()`。
 - `startM365ChatWidth()` 给 `document.documentElement` 添加 `gv-m365-chat-width-enabled`，并只注入一个 `#gv-m365-chat-width-style`。
-- CSS 范围限定在 `html.gv-m365-chat-width-enabled` 下，使用 `[role="article"]`、`fai-UserMessage`、`fai-CopilotMessage`、`fai-UserMessage__message`、`fai-CopilotMessage__content`，宽度上限为保守的 `1440px`。
+- CSS 范围限定在 `html.gv-m365-chat-width-enabled` 下，使用 `[id^="chatMessageContainer"]`、`[role="article"]`、`fai-UserMessage`、`fai-CopilotMessage`、`fai-UserMessage__message`、`fai-CopilotMessage__content`，宽度上限为保守的 `1440px`。
 - `src/pages/content/index.tsx` 只在 M365 分支调用 `startM365ChatWidth()`；Gemini 分支仍使用原 `startChatWidthAdjuster()`。
 - 新增 `src/pages/content/m365ChatWidth.test.ts`，覆盖 style/marker 幂等、M365-only selector、Gemini selector/storage 禁止、export UI root 不被修改、无 canonical/export/message body 依赖，以及 cleanup。
 
 当前限制：
 
-- fresh Edge profile 的 CDP smoke test 已确认 style/marker/export UI 注入状态正确，但该 profile 没有实际对话消息。
-- 聊天区域是否“明显变宽”、输入框是否正常、Copilot 原生按钮/顶部栏/侧边栏/菜单是否完全不受影响，仍需用户在真实已登录、有消息的 M365 conversation 中人工视觉确认。
+- 用户在真实页面反馈第一版加宽未成功；CDP 检查确认 article CSS 已注入但仍被外层 `chatMessageContainer...` 和其下包装 div 限制到约 `852px` / `800px`。
+- 已追加容器层 selector，fresh Edge + 最新 `dist_chrome` 的 CDP smoke 确认 message container 为 `1440px`、assistant content 约 `1388px`、user content 约 `1368px`。
+- 输入框是否正常、Copilot 原生按钮/顶部栏/侧边栏/菜单是否完全不受影响，仍需用户在真实已登录、有消息的 M365 conversation 中人工视觉确认。
 - 未来如 M365 DOM 布局变化，优先继续保守收紧 CSS selector，不引入 Gemini selector，也不读取消息正文。
 
 ## 验证记录
@@ -274,7 +275,8 @@ git diff --check
 - `build:chrome` 通过；沙箱内先遇到已知 `esbuild spawn EPERM`，提升到真实 Windows 环境重跑同一条命令通过，Vite 仅输出既有 chunk/asset warnings。
 - `git diff --check` 通过。
 - 真实页面 CDP smoke test：新 Edge profile 加载 `L:\project\dist_chrome` 并打开 `https://m365.cloud.microsoft/chat?redirfrom=CsrToSSR`；机器检查确认 `#gv-m365-chat-width-style` 数量为 1、`gv-m365-chat-width-enabled` marker 存在、style 包含 M365 selectors 且不含 Gemini selectors、右上角 export UI root 仍存在。
-- 真实视觉验收剩余项：fresh profile 当前没有对话消息；聊天内容明显变宽、输入框可用、顶部栏/侧边栏/菜单未被破坏，需要用户在真实已登录对话页人工确认后再回写。
+- 用户反馈第一版真实页面未加宽；随后 CDP 检查确认外层 `chatMessageContainer...` 仍限制宽度，追加容器层规则后，用最新 `dist_chrome` 打开 fresh Edge 验证：message container 为 `1440px`，assistant article 为 `1436px`，assistant content 为 `1388px`，user content 为 `1368px`。
+- 真实视觉验收剩余项：输入框可用、顶部栏/侧边栏/菜单未被破坏，需要用户在真实已登录对话页人工确认后再回写。
 
 2026-04-29 M365 最小导出 UI 接入后通过：
 

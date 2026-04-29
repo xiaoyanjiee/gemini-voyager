@@ -47,6 +47,7 @@ describe('M365 chat width', () => {
     expect(styleText).toContain('fai-UserMessage');
     expect(styleText).toContain('fai-CopilotMessage');
     expect(styleText).toContain('[role="article"]');
+    expect(styleText).toContain('[id^="chatMessageContainer"]');
     expect(styleText).not.toContain('chat-window');
     expect(styleText).not.toContain('user-query');
     expect(styleText).not.toContain('model-response');

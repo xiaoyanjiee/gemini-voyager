@@ -13,6 +13,22 @@ html.${M365_CHAT_WIDTH_ENABLED_CLASS} [role="article"]:has([class*="fai-CopilotM
   box-sizing: border-box !important;
 }
 
+html.${M365_CHAT_WIDTH_ENABLED_CLASS} [id^="chatMessageContainer"]:has([class*="fai-UserMessage"]),
+html.${M365_CHAT_WIDTH_ENABLED_CLASS} [id^="chatMessageContainer"]:has([class*="fai-CopilotMessage"]) {
+  width: min(100%, ${M365_CHAT_WIDTH_MAX}) !important;
+  max-width: min(100%, ${M365_CHAT_WIDTH_MAX}) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  box-sizing: border-box !important;
+}
+
+html.${M365_CHAT_WIDTH_ENABLED_CLASS} [id^="chatMessageContainer"] div:has([role="article"][class*="fai-UserMessage"]),
+html.${M365_CHAT_WIDTH_ENABLED_CLASS} [id^="chatMessageContainer"] div:has([role="article"][class*="fai-CopilotMessage"]) {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
 html.${M365_CHAT_WIDTH_ENABLED_CLASS} [class*="fai-UserMessage"],
 html.${M365_CHAT_WIDTH_ENABLED_CLASS} [class*="fai-CopilotMessage"] {
   max-width: min(100%, ${M365_CHAT_WIDTH_MAX}) !important;
