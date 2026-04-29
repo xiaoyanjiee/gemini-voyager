@@ -1,7 +1,7 @@
 # M365 Copilot 迁移架构基线
 
 最后更新：2026-04-29
-状态：M365 adapter 活跃基线，JSON / Markdown export MVP 与最小导出 UI 已接入，M365 chatWidth MVP 已接入，rich content extraction 已补强
+状态：M365 adapter 活跃基线，JSON / Markdown export MVP 与最小导出 UI 已接入，M365 chatWidth MVP 已接入，M365 timeline MVP 已接入，rich content extraction 已补强
 目标站点：`https://m365.cloud.microsoft/*`
 
 这是后续 Codex 会话的交接文档。修改 M365 专用代码前，必须先阅读本文件。
@@ -25,6 +25,7 @@
 - M365 code block 提取已补强：`pre` 和多行 `code` 会输出 fenced code block；M365 偶发的语言标签 + 代码 + 残缺反引号片段会归一为标准 fenced block。
 - 手动 JSON / Markdown 验证入口：`window.__gvExportM365Json()`、`window.__gvExportM365Markdown()`；这些入口仅用于本地 M365 debug/dev 真机测试，会下载当前页面导出结果并保存到对应的 `window.__gvLastM365*Export`。
 - M365 chatWidth MVP 已接入：`startM365ChatWidth()` 只在 `m365.cloud.microsoft` 分支启动，注入 `#gv-m365-chat-width-style` 并给 `document.documentElement` 添加 `gv-m365-chat-width-enabled`；CSS 只针对 M365 `chatMessageContainer...`、message article、`fai-UserMessage` / `fai-CopilotMessage` 容器，不读取消息正文、不复用 Gemini selectors、不修改 Gemini chatWidth 行为。
+- M365 timeline MVP 已接入：`startM365Timeline()` 只在 `m365.cloud.microsoft` 分支启动，基于 `extractM365CanonicalConversation()` 和 `M365TimelineService.buildIndex()` 生成 user-message markers；UI 使用 `gv-m365-timeline-*` 前缀，不复用 Gemini timeline selectors、storage、星标、preview panel 或 keyboard shortcuts；真实 M365 conversation CDP smoke 已确认 marker、tooltip、click active 和刷新幂等。
 
 ## 已吸收的计划归档
 
@@ -291,6 +292,7 @@ Windows 环境注意事项：
 - 更复杂 rich Markdown fidelity 仍需要更多真实样本；当前已覆盖段落、粗体、斜体、基础列表、基础链接、code/pre、多行 code、M365 残缺 code-fence 片段、semantic table 和 images。
 - Conversation loading 可能滞后于 URL 变化；未来 UI entrypoints 需要围绕 `[role="article"]` 做 wait/retry。
 - M365 chatWidth MVP 初版只打到 article 层，真实页面仍被外层 `chatMessageContainer...` 包装 div 限制宽度；已追加容器层 CSS，fresh Edge + 最新 `dist_chrome` 的 CDP smoke 确认 message container 为 `1440px`、assistant content 约 `1388px`、user content 约 `1368px`。仍需要在更多真实、已登录、有消息的 M365 conversations 上做人工视觉确认。
+- M365 timeline MVP 已通过单个真实 conversation 的 CDP smoke；仍需要在更多 conversation 长度、滚动位置、侧边栏/菜单状态下确认右侧 marker 不冲突。
 - Sidebar/conversation traversal 仍然延期。
 - `gv-m365-diag-marker` 等 diagnostics markers 不能影响提取。
 
@@ -298,7 +300,7 @@ Windows 环境注意事项：
 
 1. 在更多真实 M365 conversations 上稳定 `CanonicalConversation`，包含 image/code/table 样本。
 2. 增加从 `CanonicalConversation` 到现有 export service inputs 的只读 export adapter。
-3. 从 `CanonicalMessage` 生成 timeline markers，不引入新的 DOM selectors。
+3. 继续验证 M365 timeline MVP，并且任何后续增强都必须基于 `CanonicalMessage.sourceElement`，不引入新的 Gemini selector 或 storage。
 4. 继续验证并收紧 M365 chatWidth MVP，只使用 CSS 和必要的 canonical anchors。
 5. 生产入口保持 diagnostics 手动 gate；未来可删除临时 diagnostics 模块。
 
@@ -354,7 +356,7 @@ Windows 环境注意事项：
 最近一次验证通过：
 
 ```powershell
-npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts
+npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts src/pages/content/m365ExportUi.test.ts src/pages/content/m365ChatWidth.test.ts src/pages/content/m365Timeline.test.ts
 npm.cmd run typecheck
 npm.cmd exec -- eslint src/pages/content/m365*.ts src/pages/content/m365*.test.ts
 npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md M365_CHANGELOG.md
@@ -368,6 +370,7 @@ git diff --check
 - 用户在真实 M365 Copilot 页面确认右上角最小导出 UI 可见，`Export JSON` 和 `Export Markdown` 两个按钮点击后均能正常导出文件。
 - 这标记 M365 最小导出 UI 的真实页面 smoke test 通过；更深入的内容校验仍可在未来针对更多真实 conversations 继续补充。
 - 上一次 Markdown helper 真机验证：Edge reload `L:\project\dist_chrome` 后，在 `Voyager` isolated world 运行 `window.__gvExportM365Markdown()`；导出文件包含 title、platform、url、exportedAt、count、turn headings、`### User`、`### Assistant`、`**粗体**`、`- 列表` 和段落空行，且机器检查确认不包含 DOM 泄漏标记。
+- 本次 timeline 真机验证：Codex 使用最新 `L:\project\dist_chrome` 打开真实 conversation `https://m365.cloud.microsoft/chat/conversation/3a9c838f-bbfd-48aa-a85f-4e9570d20ac8`，在 `Voyager` isolated world 确认 canonical 4 条 messages / 2 条 user messages，timeline marker 数为 2；root/style/tooltip 均为 1，hover/focus tooltip 显示 user summary，click 后 marker active，刷新后不重复注入；export UI root 与 chatWidth style 仍各为 1，diagnostics marker 为 0。
 
 ## 2026-04-29 M365 minimal export UI
 
@@ -400,6 +403,14 @@ git diff --check
 - 2026-04-29 追加自主真机复测：用户授权 Codex 新建/发送测试对话后，Codex 通过 Edge CDP 在真实 `https://m365.cloud.microsoft/chat` 页面发送无敏感 rich-content prompt。首轮确认 JSON/Markdown 导出、表格、pipe escaping、https link、export UI、chatWidth 和 DOM 泄漏检查正常；随后用户指出 Codex 的 code-fence 判断误把 User prompt 中的 fenced block 算入结果，真实 Assistant 输出仍是 `JSON` 标签加普通文本代码。已修复为识别 Assistant 内容里的 M365 language-label code block 形态，不依赖 User prompt。
 - 最终真机复测：重建 `L:\project\dist_chrome` 并重启专用 Edge 测试 profile 后，在 `Voyager` isolated world 只检查 `role === "assistant"` 的消息；`firstAssistantHasJsonFence === true`、`lastAssistantHasJsonFence === true`、`lastAssistantContainsUserPrompt === false`，JSON 可 parse 且 `platform === "m365-copilot"`，Markdown title 稳定为 `M365 Copilot`，table/link/code 结构存在，无残缺反引号尾巴，无 DOM 字段泄漏，export UI root 为 1，chatWidth style 为 1，diagnostics marker 为 0。
 - 真实 image-message 样本仍 pending；本轮没有把 PDF/Image export 接入产品路径。
+
+## 2026-04-29 M365 timeline MVP
+
+- M365 Copilot 页面现在已接入轻量 timeline navigator：`src/pages/content/index.tsx` 只在 `m365.cloud.microsoft` 分支启动 `startM365Timeline()`。
+- `src/pages/content/m365Timeline.ts` 只注入 `#gv-m365-timeline-root`、`#gv-m365-timeline-style` 和 `#gv-m365-timeline-tooltip`；多次启动保持幂等，`stopM365Timeline()` 会移除 UI 并断开 observer。
+- Timeline markers 只来自 `extractM365CanonicalConversation()` 与 `M365TimelineService.buildIndex()`，并过滤到 `role === "user"`；点击 marker 会滚动到对应 `CanonicalMessage.sourceElement`，hover/focus 显示 canonical summary tooltip。
+- 本次不接星标/持久化、preview panel、keyboard shortcuts、Gemini timeline manager、Gemini timeline selectors 或 Gemini storage；不新增消息正文扫描路径，不修改 M365 export/chatWidth/extractor 行为。
+- 右侧 timeline rail 使用独立 `gv-m365-timeline-*` class/data attributes，并避开右上角 M365 export UI；2026-04-29 真实 conversation CDP smoke 已确认 marker 可见、tooltip 正常、点击后 active、刷新后不重复注入。后续仍需在更多真实 conversations 上确认不同长度和滚动状态下的视觉位置。
 
 后续更新规则：
 

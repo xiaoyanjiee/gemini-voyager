@@ -12,6 +12,7 @@ import { startM365ChatExtractor } from './m365ChatExtractor';
 import { startM365ChatWidth } from './m365ChatWidth';
 import { startM365Diagnostics } from './m365Diagnostics';
 import { startM365ExportUi } from './m365ExportUi';
+import { startM365Timeline } from './m365Timeline';
 
 import { startChangelog } from './changelog/index';
 import { startChatWidthAdjuster } from './chatWidth/index';
@@ -173,12 +174,13 @@ async function initializeFeatures(): Promise<void> {
     // M365 Copilot: register M365-only helpers/UI; do not start Gemini features.
     if (location.hostname === 'm365.cloud.microsoft') {
       console.log(
-        '[Gemini Voyager] M365 Copilot detected, starting manual diagnostics + chat extractor + export UI + chat width',
+        '[Gemini Voyager] M365 Copilot detected, starting manual diagnostics + chat extractor + export UI + chat width + timeline',
       );
       startM365Diagnostics();
       startM365ChatExtractor();
       startM365ExportUi();
       startM365ChatWidth();
+      startM365Timeline();
       return;
     }
 

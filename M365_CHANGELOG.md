@@ -1,7 +1,7 @@
 # M365 Copilot 变更与进度文档
 
 最后更新：2026-04-29
-当前状态：M365 canonical baseline、export adapter baseline、JSON / Markdown export UI、M365 chatWidth MVP 和 rich content extraction 补强已落地，diagnostics 已改为手动 gate
+当前状态：M365 canonical baseline、export adapter baseline、JSON / Markdown export UI、M365 chatWidth MVP、M365 timeline MVP 和 rich content extraction 补强已落地，diagnostics 已改为手动 gate
 配套上下文：`M365_COPILOT_CONTEXT.md`
 
 后续 Codex 会话开始修改 M365 相关代码前，必须先阅读本文件和 `M365_COPILOT_CONTEXT.md`。任何改变 M365 selectors、canonical model、extractor 输出、export adapter、安全策略、浏览器验证流程或迁移优先级的任务，都必须同时更新这两个文档。
@@ -55,6 +55,7 @@
 - `window.__gvExportM365Json()` / `window.__gvExportM365Markdown()` 是仅用于本地验证的 M365 debug/dev 入口，会下载当前页面 JSON / Markdown 并保存对应的 `window.__gvLastM365*Export`。
 - Export adapter 已接入 M365-only 最小 UI，支持 JSON / Markdown；不改变 Gemini export 行为。
 - M365 chatWidth MVP 已接入 M365-only 启动分支：只注入隔离 CSS 和 HTML marker，不读取消息正文、不依赖 canonical/export services、不改变 Gemini chatWidth；真实页面反馈初版未生效后，已追加外层 `chatMessageContainer...` 包装 div 的宽度覆盖。
+- M365 timeline MVP 已接入 M365-only 启动分支：基于 `extractM365CanonicalConversation()` 和 `M365TimelineService.buildIndex()` 生成 user-message markers，点击 marker 滚动到对应 `CanonicalMessage.sourceElement`，不复用 Gemini timeline selectors/storage/UI state。
 
 ## 阶段变更记录
 
@@ -279,7 +280,55 @@ Plan 内容：
 - 本轮没有接入 PDF/Image export，也没有新增 M365 UI。
 - 真实 image-message DOM 仍需要更多样本；本轮真实页面验证以 link/code/table 导出为主。
 
+### 10. M365 timeline MVP
+
+目标是在 `m365.cloud.microsoft` 页面提供一个轻量 M365-only timeline navigator，让宽屏阅读时可以通过右侧 marker 快速跳到对应 user prompt，同时保持 export、chatWidth 和 extraction 主线不变。
+
+Plan 内容：
+
+- 新增 `src/pages/content/m365Timeline.ts`，暴露 `startM365Timeline()` 和 `stopM365Timeline()`。
+- 只在 `src/pages/content/index.tsx` 的 `m365.cloud.microsoft` 分支启动，和 diagnostics、chat extractor、export UI、chatWidth 并列；Gemini 分支继续使用原 `startTimeline()`。
+- marker 数据只来自 `extractM365CanonicalConversation()` 与 `M365TimelineService.buildIndex(conversation)`，并过滤到 `role === "user"`。
+- UI 使用独立 `#gv-m365-timeline-root`、`#gv-m365-timeline-style`、`#gv-m365-timeline-tooltip` 和 `gv-m365-timeline-*` class/data attributes。
+- marker 是可聚焦 button，支持 hover/focus tooltip，点击后调用 `sourceElement.scrollIntoView({ block: "start", behavior: "smooth" })` 并标记 active。
+- 使用一个 debounced `MutationObserver` 在页面动态变化后重建 markers；root/style/tooltip 注入保持幂等。
+- 不做 storage、star/pin、preview panel、keyboard shortcuts，不复用 Gemini timeline manager，不引用 Gemini timeline selectors 或 storage keys，不新增消息正文扫描入口。
+
+已完成：
+
+- `src/pages/content/m365Timeline.ts` 已实现 M365-only timeline root/style/tooltip、user marker 渲染、tooltip、click-to-scroll、active marker 和 cleanup。
+- `src/pages/content/index.tsx` 已在 M365 分支调用 `startM365Timeline()`；Gemini timeline/export/sidebar/chatWidth 启动逻辑保持不变。
+- `src/pages/content/m365Timeline.test.ts` 覆盖 root/style/tooltip 幂等注入、只渲染 user markers、点击 canonical source element 滚动、tooltip 无 DOM 泄漏、export UI root 不被修改、无 Gemini selector/storage 引用，以及 `stopM365Timeline()` cleanup。
+
+当前限制：
+
+- MVP 只显示 user-message markers，不做 assistant marker、滚动同步高亮、持久化状态或快捷键。
+- 真机视觉仍需要在更多已登录 M365 conversations 上确认 marker 与 M365 右侧滚动/菜单区域是否长期不冲突。
+
 ## 验证记录
+
+2026-04-29 M365 timeline MVP 接入后通过：
+
+```powershell
+npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts src/pages/content/m365ExportUi.test.ts src/pages/content/m365ChatWidth.test.ts src/pages/content/m365Timeline.test.ts
+npm.cmd run typecheck
+npm.cmd exec -- eslint src/pages/content/m365*.ts src/pages/content/m365*.test.ts
+npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md M365_CHANGELOG.md
+npm.cmd run build:chrome
+git diff --check
+```
+
+验证结果：
+
+- Targeted tests：5 个 test files、54 个 tests 全部通过。
+- `typecheck` 通过。
+- M365 目标文件 eslint 通过。
+- Prettier check 通过；新增 timeline 文件先由 Prettier 写回后复测通过。
+- `build:chrome` 通过；sandbox 内仍会遇到已知 `esbuild spawn EPERM`，提升到真实 Windows 环境重跑同一命令后通过，Vite 仅输出既有 chunk/asset warnings。
+- `git diff --check` 通过。
+- 真机 smoke test：Codex 启动带 CDP 的 Edge 测试窗口，加载最新 `L:\project\dist_chrome` 并打开真实 M365 conversation `https://m365.cloud.microsoft/chat/conversation/3a9c838f-bbfd-48aa-a85f-4e9570d20ac8`。在 `Voyager` isolated world 中确认 `window.__gvExtractCanonical()` 可用，canonical 共 4 条 messages / 2 条 user messages，timeline marker 数为 2，`#gv-m365-timeline-root`、`#gv-m365-timeline-style`、`#gv-m365-timeline-tooltip` 均为 1。
+- 真机交互检查：第一枚 marker hover/focus 后 tooltip 显示 user prompt summary；click 后 marker 被标记为 active，说明事件监听与 scroll action 路径已触发。刷新页面后 root/style/tooltip 仍各 1 个，marker 仍为 2，未重复注入。
+- 兼容检查：同一页面中 `#gv-m365-export-ui-root` 为 1、`#gv-m365-chat-width-style` 为 1、diagnostics marker 为 0，timeline CSS 不含 Gemini selector/storage key。短时间 console 捕获到 M365 原生网络 404/CORS/resource error，但未观察到 Voyager/M365 timeline 相关 exception。
 
 2026-04-29 M365 rich content extraction 补强后通过：
 
@@ -446,7 +495,7 @@ git diff --check
 1. 采集真实 M365 image-message DOM，确认图片尺寸、alt/title/currentSrc 行为。
 2. 只读验证 export adapter 在更多 conversation 上的 turns 输出，不接 UI。
 3. 在更多真实 M365 conversations 上继续验证复杂 rich Markdown fidelity，尤其是嵌套列表、复杂表格和混合格式。
-4. 设计 M365 timeline markers，但数据源必须是 `CanonicalMessage`。
+4. 在更多真实 M365 conversations 中验证 timeline marker 可见性、tooltip 与 click-to-scroll；如后续增加滚动同步，也只能基于 `CanonicalMessage.sourceElement`。
 5. 继续验证并收紧 M365 chatWidth MVP，只处理 CSS/layout；如果需要锚点，只使用 canonical source elements。
 6. 在准备生产发布前，重新评估是否删除 `m365Diagnostics.ts`，或继续保持手动 gate。
 

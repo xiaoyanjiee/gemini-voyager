@@ -1,0 +1,195 @@
+import { readFileSync } from 'node:fs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import type { CanonicalConversation, CanonicalMessage } from './m365ConversationTypes';
+import { startM365Timeline, stopM365Timeline } from './m365Timeline';
+
+function createMessage(
+  role: CanonicalMessage['role'],
+  index: number,
+  text: string,
+): CanonicalMessage {
+  const sourceElement = document.createElement('article');
+  sourceElement.setAttribute('role', 'article');
+  sourceElement.className = role === 'user' ? 'fai-UserMessage' : 'fai-CopilotMessage';
+  sourceElement.textContent = text;
+  document.body.appendChild(sourceElement);
+
+  return {
+    id: `m365:${index}:${role}`,
+    fingerprint: `${role}:${text}`,
+    role,
+    text,
+    content: [{ kind: 'text', text }],
+    imageCount: 0,
+    index,
+    visible: true,
+    className: sourceElement.className,
+    roleAttribute: 'article',
+    sourceElement,
+    contentElement: sourceElement,
+  };
+}
+
+function createConversation(messages: CanonicalMessage[]): CanonicalConversation {
+  return {
+    timestamp: '2026-04-29T00:00:00.000Z',
+    url: 'https://m365.cloud.microsoft/chat/conversation/test',
+    totalMessages: messages.length,
+    userMessages: messages.filter((message) => message.role === 'user').length,
+    assistantMessages: messages.filter((message) => message.role === 'assistant').length,
+    totalImages: 0,
+    messages,
+    rawStats: {
+      rawUserNodeCount: 0,
+      rawAssistantNodeCount: 0,
+      logicalCandidateCount: messages.length,
+    },
+  };
+}
+
+function startWithConversation(
+  conversation: CanonicalConversation,
+  scrollToElement = vi.fn(),
+): ReturnType<typeof vi.fn> {
+  startM365Timeline({
+    extractConversation: () => conversation,
+    scrollToElement,
+  });
+  return scrollToElement;
+}
+
+describe('m365Timeline', () => {
+  afterEach(() => {
+    stopM365Timeline();
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  it('injects exactly one root and one style', () => {
+    const conversation = createConversation([createMessage('user', 0, 'First prompt')]);
+
+    startWithConversation(conversation);
+
+    expect(document.querySelectorAll('#gv-m365-timeline-root')).toHaveLength(1);
+    expect(document.querySelectorAll('#gv-m365-timeline-style')).toHaveLength(1);
+    expect(document.querySelectorAll('#gv-m365-timeline-tooltip')).toHaveLength(1);
+  });
+
+  it('keeps multiple starts idempotent', () => {
+    const conversation = createConversation([
+      createMessage('user', 0, 'First prompt'),
+      createMessage('assistant', 1, 'First answer'),
+    ]);
+
+    startWithConversation(conversation);
+    startWithConversation(conversation);
+
+    expect(document.querySelectorAll('#gv-m365-timeline-root')).toHaveLength(1);
+    expect(document.querySelectorAll('#gv-m365-timeline-style')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-gv-m365-timeline-marker]')).toHaveLength(1);
+  });
+
+  it('renders markers only for user messages', () => {
+    const conversation = createConversation([
+      createMessage('user', 0, 'First prompt'),
+      createMessage('assistant', 1, 'First answer'),
+      createMessage('user', 2, 'Second prompt'),
+    ]);
+
+    startWithConversation(conversation);
+
+    const markers = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('[data-gv-m365-timeline-marker]'),
+    );
+    expect(markers).toHaveLength(2);
+    expect(markers.map((marker) => marker.getAttribute('aria-label'))).toEqual([
+      'First prompt',
+      'Second prompt',
+    ]);
+  });
+
+  it('scrolls to the canonical user source element when a marker is clicked', () => {
+    const first = createMessage('user', 0, 'First prompt');
+    const second = createMessage('user', 1, 'Second prompt');
+    const conversation = createConversation([first, second]);
+    const scrollToElement = startWithConversation(conversation);
+
+    const secondMarker = document.querySelectorAll<HTMLButtonElement>(
+      '[data-gv-m365-timeline-marker]',
+    )[1];
+    secondMarker.click();
+
+    expect(scrollToElement).toHaveBeenCalledTimes(1);
+    expect(scrollToElement).toHaveBeenCalledWith(second.sourceElement);
+    expect(secondMarker.classList.contains('gv-m365-timeline-marker-active')).toBe(true);
+  });
+
+  it('shows tooltip text from the timeline summary without DOM object leakage', () => {
+    const longPrompt = `Summarize this prompt ${'with repeated words '.repeat(8)}`;
+    const conversation = createConversation([createMessage('user', 0, longPrompt)]);
+
+    startWithConversation(conversation);
+
+    const marker = document.querySelector<HTMLButtonElement>('[data-gv-m365-timeline-marker]');
+    marker?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    const tooltip = document.getElementById('gv-m365-timeline-tooltip');
+
+    expect(tooltip?.hidden).toBe(false);
+    expect(tooltip?.textContent).toContain('Summarize this prompt');
+    expect(tooltip?.textContent).not.toMatch(/HTML|Element|\[object/);
+  });
+
+  it('does not remove or modify the M365 export UI root', () => {
+    const exportRoot = document.createElement('div');
+    exportRoot.id = 'gv-m365-export-ui-root';
+    exportRoot.dataset.gvM365ExportUi = 'true';
+    exportRoot.textContent = 'Export JSON';
+    document.body.appendChild(exportRoot);
+
+    startWithConversation(createConversation([createMessage('user', 0, 'First prompt')]));
+
+    expect(document.getElementById('gv-m365-export-ui-root')).toBe(exportRoot);
+    expect(exportRoot.dataset.gvM365ExportUi).toBe('true');
+    expect(exportRoot.textContent).toBe('Export JSON');
+  });
+
+  it('does not reference Gemini timeline selectors or storage keys in injected CSS', () => {
+    startWithConversation(createConversation([createMessage('user', 0, 'First prompt')]));
+
+    const css = document.getElementById('gv-m365-timeline-style')?.textContent || '';
+
+    expect(css).not.toContain('gemini-timeline');
+    expect(css).not.toContain('timeline-dot');
+    expect(css).not.toContain('geminiTimeline');
+    expect(css).not.toContain('chat-window');
+  });
+
+  it('does not import Gemini timeline code or reference Gemini selectors/storage keys', () => {
+    const source = readFileSync('src/pages/content/m365Timeline.ts', 'utf8');
+
+    expect(source).not.toContain('./timeline');
+    expect(source).not.toContain('timeline/index');
+    expect(source).not.toContain('geminiTimeline');
+    expect(source).not.toContain('gemini-timeline');
+    expect(source).not.toContain('chat-window');
+    expect(source).not.toContain('user-query');
+    expect(source).not.toContain('model-response');
+    expect(source).not.toContain('response-container');
+    expect(source).not.toContain('conversation-container');
+  });
+
+  it('removes root, style, tooltip, and observer on stop', () => {
+    const observeSpy = vi.spyOn(MutationObserver.prototype, 'observe');
+    const disconnectSpy = vi.spyOn(MutationObserver.prototype, 'disconnect');
+
+    startWithConversation(createConversation([createMessage('user', 0, 'First prompt')]));
+    stopM365Timeline();
+
+    expect(observeSpy).toHaveBeenCalledTimes(1);
+    expect(disconnectSpy).toHaveBeenCalled();
+    expect(document.getElementById('gv-m365-timeline-root')).toBeNull();
+    expect(document.getElementById('gv-m365-timeline-style')).toBeNull();
+    expect(document.getElementById('gv-m365-timeline-tooltip')).toBeNull();
+  });
+});
