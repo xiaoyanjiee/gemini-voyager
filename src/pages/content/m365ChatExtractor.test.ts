@@ -217,6 +217,42 @@ console.log(ready);</code>
     );
   });
 
+  it('normalizes M365 language-labeled assistant code text into fenced Markdown', () => {
+    document.body.innerHTML = `
+      <article role="article" class="fai-CopilotMessage">
+        <div class="fai-CopilotMessage__content">
+          <p>以下为示例：</p>
+          <div>JSON</div>
+          <div>{</div>
+          <div>"status": "ok",</div>
+          <div>"format": "export-test"</div>
+          <div>}</div>
+          <table>
+            <tr>
+              <th>列 A</th>
+              <th>列 B</th>
+            </tr>
+            <tr>
+              <td>JSON | Markdown</td>
+              <td>示例文本</td>
+            </tr>
+          </table>
+        </div>
+      </article>
+    `;
+
+    const result = extractM365Messages();
+
+    expect(result.totalMessages).toBe(1);
+    expect(result.messages[0].text).toBe(
+      [
+        '以下为示例：',
+        ['```json', '{', '"status": "ok",', '"format": "export-test"', '}', '```'].join('\n'),
+        ['| 列 A | 列 B |', '| --- | --- |', '| JSON \\| Markdown | 示例文本 |'].join('\n'),
+      ].join('\n\n'),
+    );
+  });
+
   it('removes assistant chrome, chain-of-thought controls, and feedback actions from extracted text', () => {
     document.body.innerHTML = `
       <article role="article" class="fai-CopilotMessage">

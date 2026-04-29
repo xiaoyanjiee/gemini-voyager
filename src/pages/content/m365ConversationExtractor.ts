@@ -148,7 +148,9 @@ export class M365ConversationExtractor {
 
   private static elementToMarkdownText(el: Element): string {
     return this.normalizeMarkdownSpacing(
-      this.normalizeMalformedCodeFenceFragments(this.renderChildNodes(el)),
+      this.normalizeM365LanguageLabeledCodeBlocks(
+        this.normalizeMalformedCodeFenceFragments(this.renderChildNodes(el)),
+      ),
     );
   }
 
@@ -293,6 +295,87 @@ export class M365ConversationExtractor {
       /(^|\n\n)(json|javascript|typescript|python|bash|shell|powershell|html|css|sql|xml|yaml|markdown|text)\n\n([\s\S]*?)\n\n`{1,2}(?=\n\n|$)/gi,
       (_match, prefix: string, language: string, code: string) =>
         `${prefix}${this.codeToMarkdownBlock(code, language)}`,
+    );
+  }
+
+  private static normalizeM365LanguageLabeledCodeBlocks(text: string): string {
+    const chunks = text.replace(/\r\n?/g, '\n').split(/\n{2,}/);
+    const normalizedChunks: string[] = [];
+
+    for (let index = 0; index < chunks.length; index += 1) {
+      const chunk = chunks[index].trim();
+      const language = this.getCodeLanguageLabel(chunk);
+
+      if (!language || index + 1 >= chunks.length) {
+        normalizedChunks.push(chunks[index]);
+        continue;
+      }
+
+      const codeChunks: string[] = [];
+      let cursor = index + 1;
+
+      while (cursor < chunks.length) {
+        const candidate = chunks[cursor].trim();
+        if (!candidate) break;
+        if (codeChunks.length > 0 && this.isMarkdownBoundaryAfterCode(candidate)) break;
+        if (!this.isLikelyCodeChunk(candidate, language)) break;
+
+        codeChunks.push(candidate);
+        cursor += 1;
+      }
+
+      if (codeChunks.length === 0) {
+        normalizedChunks.push(chunks[index]);
+        continue;
+      }
+
+      normalizedChunks.push(this.codeToMarkdownBlock(codeChunks.join('\n'), language));
+      index = cursor - 1;
+    }
+
+    return normalizedChunks.join('\n\n');
+  }
+
+  private static getCodeLanguageLabel(value: string): string | null {
+    const normalized = value.trim().toLowerCase();
+    return /^(json|javascript|typescript|python|bash|shell|powershell|html|css|sql|xml|yaml|markdown|text)$/.test(
+      normalized,
+    )
+      ? normalized
+      : null;
+  }
+
+  private static isMarkdownBoundaryAfterCode(value: string): boolean {
+    return (
+      /^\|.+\|/.test(value) ||
+      /^#{1,6}\s/.test(value) ||
+      /^[-*+]\s/.test(value) ||
+      /^\d+\.\s/.test(value)
+    );
+  }
+
+  private static isLikelyCodeChunk(value: string, language: string): boolean {
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+
+    if (language === 'json') {
+      return (
+        /^[{[\]}],?$/.test(trimmed) ||
+        /^[{[]/.test(trimmed) ||
+        /^[\]}]/.test(trimmed) ||
+        /^"[^"]+"\s*:/.test(trimmed) ||
+        /^'[^']+'\s*:/.test(trimmed) ||
+        /[:,]\s*$/.test(trimmed)
+      );
+    }
+
+    return (
+      /^[{[\]}]/.test(trimmed) ||
+      /[;{}]$/.test(trimmed) ||
+      /\b(const|let|var|function|class|import|export|return|if|for|while|def|print|echo|select|from|where)\b/i.test(
+        trimmed,
+      ) ||
+      /<\/?[a-z][\w:-]*(\s|>)/i.test(trimmed)
     );
   }
 

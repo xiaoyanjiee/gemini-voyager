@@ -397,6 +397,8 @@ git diff --check
 - 真实 M365 页面验证：Codex 发送了一条无敏感测试 prompt，请求 Copilot 返回 link、fenced code block 和 table；用户检查 `D:/Downloads/m365-copilot-2026-04-29T05-55-37-676Z.json` 与 `D:/Downloads/m365-copilot-2026-04-29T05-55-37-678Z.md` 后确认两个导出文件正确。
 - 随后发现该 `.md` 在 VS Code 预览中标题变成 prompt，且 code block 残留不完整反引号；原因是导出标题取了 M365 页面标题，且 M365 code block DOM 没有稳定落到标准 `<pre>`。本轮已用稳定标题和 code-fence 归一化修复。
 - 修复后真机复测：加载最新 `L:\project\dist_chrome` 后，在真实 M365 页面发送无敏感测试 prompt 并导出 `m365-copilot-2026-04-29T09-36-28-344Z.json` / `m365-copilot-2026-04-29T09-36-28-346Z.md`；机器检查确认 JSON 可 parse、`platform === "m365-copilot"`、title 为 `M365 Copilot`、Markdown 以 `# M365 Copilot` 开头且不是 prompt、包含 ```json fenced code block、无残缺反引号尾巴、包含表格与 `JSON \| Markdown` 转义单元格、包含 https link、无 DOM 字段泄漏、export UI root 为 1、chatWidth style 为 1、diagnostics marker 为 0。
+- 2026-04-29 追加自主真机复测：用户授权 Codex 新建/发送测试对话后，Codex 通过 Edge CDP 在真实 `https://m365.cloud.microsoft/chat` 页面发送无敏感 rich-content prompt。首轮确认 JSON/Markdown 导出、表格、pipe escaping、https link、export UI、chatWidth 和 DOM 泄漏检查正常；随后用户指出 Codex 的 code-fence 判断误把 User prompt 中的 fenced block 算入结果，真实 Assistant 输出仍是 `JSON` 标签加普通文本代码。已修复为识别 Assistant 内容里的 M365 language-label code block 形态，不依赖 User prompt。
+- 最终真机复测：重建 `L:\project\dist_chrome` 并重启专用 Edge 测试 profile 后，在 `Voyager` isolated world 只检查 `role === "assistant"` 的消息；`firstAssistantHasJsonFence === true`、`lastAssistantHasJsonFence === true`、`lastAssistantContainsUserPrompt === false`，JSON 可 parse 且 `platform === "m365-copilot"`，Markdown title 稳定为 `M365 Copilot`，table/link/code 结构存在，无残缺反引号尾巴，无 DOM 字段泄漏，export UI root 为 1，chatWidth style 为 1，diagnostics marker 为 0。
 - 真实 image-message 样本仍 pending；本轮没有把 PDF/Image export 接入产品路径。
 
 后续更新规则：
