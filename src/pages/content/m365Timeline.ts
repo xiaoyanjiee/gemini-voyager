@@ -55,7 +55,7 @@ function ensureM365TimelineStyle(): void {
 #${M365_TIMELINE_ROOT_ID} {
   position: fixed;
   top: 184px;
-  right: 18px;
+  right: -3px;
   bottom: 88px;
   z-index: 2147483645;
   width: 24px;
@@ -76,7 +76,7 @@ function ensureM365TimelineStyle(): void {
   position: absolute;
   inset: 0 11px;
   border-radius: 999px;
-  background: rgba(97, 97, 97, 0.22);
+  background: rgba(97, 97, 97, 0.12);
 }
 
 .gv-m365-timeline-marker {
