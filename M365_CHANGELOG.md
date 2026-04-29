@@ -40,7 +40,7 @@
 当前能力：
 
 - `manifest.json` 已覆盖 `https://m365.cloud.microsoft/*`，content script 会进入 M365 页面。
-- `src/pages/content/index.tsx` 已把 M365 与 Gemini 功能隔离：M365 页面只注册 M365 手动 diagnostics 和 chat extractor，然后 return，不启动 Gemini timeline/export/sidebar 等功能。
+- `src/pages/content/index.tsx` 已把 M365 与 Gemini 功能隔离：M365 页面只注册 M365 手动 diagnostics、chat extractor 和 M365-only 最小 export UI，然后 return，不启动 Gemini timeline/export/sidebar 等功能。
 - `window.__gvExtract()` 保持旧调试输出兼容；`window.__gvExtractCanonical()` 返回 canonical model。
 - `window.__gvDiagRun()` / `window.__gvDiagClear()` 仍可用于人工排查，但默认不会自动扫描 DOM、注入 marker、记录 URL/DOM/text 摘要。
 - `CanonicalConversation` / `CanonicalMessage` 已成为 M365 extraction 和未来 export/timeline/layout 之间的强制边界。
@@ -49,7 +49,7 @@
 - `M365ExportService.buildMarkdownExport()` 和 `serializeMarkdownExport()` 已能生成包含 metadata 和 turns 的 M365 Markdown string。
 - M365 assistant 正文提取会把常见 HTML 结构保留为 Markdown 文本，包括段落空行、粗体、斜体、基础列表、基础链接和 code/pre。
 - `window.__gvExportM365Json()` / `window.__gvExportM365Markdown()` 是仅用于本地验证的 M365 debug/dev 入口，会下载当前页面 JSON / Markdown 并保存对应的 `window.__gvLastM365*Export`。
-- Export adapter 仍未接入 M365 UI，不改变 Gemini export 行为。
+- Export adapter 已接入 M365-only 最小 UI，支持 JSON / Markdown；不改变 Gemini export 行为。
 
 ## 阶段变更记录
 
@@ -199,7 +199,50 @@ M365 image content 会被转换为 Markdown image 语法，因此 URL 必须先�
 - 避免 SVG data URL 或超大 inline payload 流入 Markdown/PDF/Image export 路径。
 - 保留常见 raster image data URL 的导出能力。
 
+### 7. M365 最小导出 UI
+
+目标是在 M365 Copilot 页面提供一个最小可用、M365-only 的导出入口，让用户不用再打开 console helper 也可以导出当前 canonical conversation。
+
+Plan 内容：
+
+- 只做 JSON 和 Markdown；不做 PDF、Image export、timeline、chatWidth，也不搬迁 Gemini 完整导出 UI。
+- UI 放在右上角独立浮层，使用 M365 专用 `gv-m365-export-*` class、`data-gv-m365-export-*` attribute 和 `gv-m365-export-ui-style` style id。
+- 导出 action 只调用 `M365ExportService.serializeJsonExport()` / `serializeMarkdownExport()`，并继续通过 `extractM365CanonicalConversation()` 获取 canonical conversation。
+- 导出前用 `M365ExportService.buildTurns()` 判断是否存在可导出 turns；没有内容时只提示，不下载空文件。
+- 文件名使用页面标题或默认 `M365 Copilot`，清理 Windows 非法字符和保留名，并追加 ISO 日期时间后缀。
+
+已完成：
+
+- 新增 `src/pages/content/m365ExportUi.ts`，包含 `startM365ExportUi()`、`runM365ExportAction()`、文件名清理和 Blob 下载逻辑。
+- `src/pages/content/index.tsx` 只在 `m365.cloud.microsoft` 分支启动 `startM365ExportUi()`；Gemini `startExportButton()` 和 `ExportDialog` 未接入 M365。
+- 右上角 UI 提供 `Export JSON` / `Export Markdown`，并显示轻量成功、失败或空内容状态。
+- 新增 `src/pages/content/m365ExportUi.test.ts`，覆盖 JSON/Markdown serializer 调用、空 conversation 不下载、文件名 sanitization、DOM 元素不进入 Gemini-style turns、下载内容不含 DOM 泄漏标记，以及 UI/style idempotent 注入。
+
+当前限制：
+
+- 真实 M365 页面上的人工点击验证仍需在 build 后加载 `L:\project\dist_chrome` 到 Edge，并在登录态 M365 Copilot 页面操作 UI。
+- PDF、Image export、timeline、chatWidth 仍延期。
+
 ## 验证记录
+
+2026-04-29 M365 最小导出 UI 接入后通过：
+
+```powershell
+npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts src/pages/content/m365ExportUi.test.ts
+npm.cmd run typecheck
+npm.cmd exec -- eslint src/pages/content/m365*.ts src/pages/content/m365*.test.ts
+npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md M365_CHANGELOG.md
+npm.cmd run build:chrome
+```
+
+验证结果：
+
+- Targeted tests：3 个 test files，34 个 tests 全部通过。
+- `typecheck` 通过。
+- M365 目标文件 eslint 通过。
+- Prettier check 通过。
+- `build:chrome` 通过；Vite 仅输出既有 chunk/asset warnings。
+- Codex sandbox 运行 Vitest 和 `build:chrome` 时遇到已知 `esbuild spawn EPERM`，提升到真实 Windows 环境后重跑同一条 `npm.cmd` 命令通过。
 
 2026-04-29 M365 Markdown HTML 结构保真修复后通过：
 

@@ -1,7 +1,7 @@
 # M365 Copilot 迁移架构基线
 
 最后更新：2026-04-29
-状态：M365 adapter 活跃基线，JSON / Markdown export MVP 底层能力已具备
+状态：M365 adapter 活跃基线，JSON / Markdown export MVP 底层能力已具备，M365 最小导出 UI 已接入
 目标站点：`https://m365.cloud.microsoft/*`
 
 这是后续 Codex 会话的交接文档。修改 M365 专用代码前，必须先阅读本文件。
@@ -18,7 +18,7 @@
 - 自动化测试已覆盖：嵌套节点不重复、空 user 过滤、assistant 快照去重、多段 assistant 顺序、正文容器优先、chrome/feedback 清理、兼容 facade、image-only message、小 icon 过滤、fallback article、canonical id 稳定性。
 - 手动运行 Diagnostics 时，标框优先标记真实 M365 message article，避免 breadcrumb/list 抢占 `msg[]` 标记名额。
 - 2026-04-28 已在 Windows 本地开发环境验证：`npm.cmd` 测试/构建可用，Edge 加载 `L:\project\dist_chrome` 后，`Voyager` isolated world 中存在 `window.__gvDiagRun()` / `window.__gvExtract()` / `window.__gvExtractCanonical()`。
-- `M365ExportService` 已提供只读 export adapter：从 `CanonicalConversation` 生成现有 `ChatTurn[]` 和 `ConversationMetadata`，支持 plain text、安全图片 Markdown、M365 JSON export MVP 和 M365 Markdown export MVP，但尚未接入正式 M365 export UI。
+- `M365ExportService` 已提供只读 export adapter：从 `CanonicalConversation` 生成现有 `ChatTurn[]` 和 `ConversationMetadata`，支持 plain text、安全图片 Markdown、M365 JSON export MVP 和 M365 Markdown export MVP；M365 页面已接入 JSON / Markdown 最小导出 UI。
 - M365 assistant 正文提取会把常见 HTML 结构保留为 Markdown 文本，包括段落空行、`strong` / `b` 粗体、`em` / `i` 斜体、`ul` / `ol` 列表、基础链接和 fenced code block；仍不重新扫描 DOM，不复用 Gemini selectors。
 - 手动 JSON / Markdown 验证入口：`window.__gvExportM365Json()`、`window.__gvExportM365Markdown()`；这些入口仅用于本地 M365 debug/dev 真机测试，会下载当前页面导出结果并保存到对应的 `window.__gvLastM365*Export`。
 
@@ -173,7 +173,7 @@ Conversation export 路线：
 - 当前 `M365ExportService.buildMarkdownExport()` / `serializeMarkdownExport()` 已生成可读 Markdown 字符串：标题、`platform: M365 Copilot`、`url`、`exportedAt`、`count` 和按 turn 顺序输出的 user / assistant 内容；assistant 文本来自 canonical 内容，并会保留常见 HTML 结构对应的 Markdown 粗体、列表和段落空行。
 - 当前 `window.__gvExportM365Json()` / `window.__gvExportM365Markdown()` 可在 `Voyager` isolated world 中作为 M365 debug/dev only 入口下载当前页面 JSON / Markdown，并把结果保存到 `window.__gvLastM365JsonExport` / `window.__gvLastM365MarkdownExport`；这不是最终导出 UI。
 - 图片会转换为 Markdown image 语法；只允许 `http:`、`https:`、`blob:` 和不超过 `1_048_576` 字符的 `data:image/png|jpeg|webp|gif;base64,...` 来源，其余 URL 会被过滤。
-- 当前仍未添加 M365 export UI；只有当 JSON / Markdown dev export 能力在更多真实对话上稳定后，才添加正式入口。
+- 当前已添加 M365 最小 export UI，入口只支持 JSON / Markdown；更完整的正式导出体验等待更多真实对话验证后再设计。
 - 优先保留 JSON 和 Markdown；PDF/Image 等富内容处理验证后再复用现有 export services。
 
 Timeline 路线：
@@ -338,7 +338,7 @@ Windows 环境注意事项：
 - M365 页面只注册手动 diagnostics 和 chat extractor，不启动 Gemini 功能。
 - Diagnostics 默认不会自动扫描 DOM、注入 marker、记录 URL/DOM/text 摘要；人工排查时使用 `window.__gvDiagRun()`。
 - `window.__gvExtract()` 和 `window.__gvExtractCanonical()` 仍是当前 M365 提取调试入口。
-- `M365ExportService` 已提供只读 adapter，可从 `CanonicalConversation` 生成 `ChatTurn[]`、metadata、M365 JSON export payload 和 M365 Markdown export string，但仍未接入正式 M365 export UI。
+- `M365ExportService` 已提供只读 adapter，可从 `CanonicalConversation` 生成 `ChatTurn[]`、metadata、M365 JSON export payload 和 M365 Markdown export string；M365 页面已接入右上角 JSON / Markdown 最小导出 UI。
 - M365 Markdown export 已在真实页面验证：assistant 内容中的 `**粗体**`、`- 列表` 和段落空行可进入 `.md` 导出文件。
 - `window.__gvExportM365Json()` 和 `window.__gvExportM365Markdown()` 是 M365 debug/dev only 本地验证入口，可下载当前 canonical conversation 的 JSON / Markdown，并保存对应的 `window.__gvLastM365*Export`。
 - 2026-04-28 用户已按 `Voyager` isolated world 测试流程实际导出 M365 JSON 文件，并确认文件内容看起来正常；这标记 JSON export MVP 真机手动验收通过。
@@ -360,6 +360,15 @@ git diff --check
 - 2026-04-29，Edge 加载 `L:\project\dist_chrome` 并 reload extension 后，在 `Voyager` isolated world 运行 `window.__gvExportM365Markdown()`。
 - 导出文件 `m365-copilot-2026-04-28T16-23-59-118Z.md` 包含 title、platform、url、exportedAt、count、turn headings、`### User`、`### Assistant`、`**粗体**`、`- 列表` 和段落空行。
 - 机器检查确认不包含 DOM 泄漏标记，用户人工查看后确认“新版正常”。
+
+## 2026-04-29 M365 minimal export UI
+
+- M365 Copilot 页面现在已接入最小导出 UI：右上角独立浮层提供 `Export JSON` 和 `Export Markdown` 两个入口。
+- UI 只在 `m365.cloud.microsoft` 分支启动，不启动或复用 Gemini `startExportButton()` / `ExportDialog`，不修改 Gemini export 行为。
+- 导出 action 继续消费 `extractM365CanonicalConversation()` 产出的 `CanonicalConversation`，并只调用 `M365ExportService.serializeJsonExport()` / `serializeMarkdownExport()`；不会重新扫描 M365 DOM，也不会复用 Gemini selector。
+- 空 conversation 或无可导出 turns 时只显示轻量状态提示，不下载空文件。
+- 文件名会使用页面标题或默认 `M365 Copilot`，清理 Windows 非法文件名字符和保留名，并追加 ISO 日期时间后缀。
+- PDF、Image export、timeline、chatWidth 仍未接入；这次只完成 JSON / Markdown 最小 UI。
 
 后续更新规则：
 
