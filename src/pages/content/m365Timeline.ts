@@ -54,9 +54,9 @@ function ensureM365TimelineStyle(): void {
   style.textContent = `
 #${M365_TIMELINE_ROOT_ID} {
   position: fixed;
-  top: 184px;
-  right: -3px;
-  bottom: 88px;
+  top: 60px;
+  right: 18px;
+  bottom: 154px;
   z-index: 2147483645;
   width: 24px;
   pointer-events: none;
