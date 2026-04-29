@@ -37,6 +37,7 @@ const MARKDOWN_BLOCK_TAGS = new Set([
   'MAIN',
   'P',
   'SECTION',
+  'TABLE',
 ]);
 
 interface TaggedNode {
@@ -174,6 +175,10 @@ export class M365ConversationExtractor {
       return code ? `\`\`\`\n${code}\n\`\`\`` : '';
     }
 
+    if (tagName === 'TABLE') {
+      return this.tableToMarkdown(node);
+    }
+
     const childText = this.renderInlineChildren(node).trim();
     if (!childText) return '';
 
@@ -235,6 +240,39 @@ export class M365ConversationExtractor {
       })
       .filter((item) => item.trim().length > 0)
       .join('\n');
+  }
+
+  private static tableToMarkdown(table: Element): string {
+    const rows = Array.from(table.querySelectorAll('tr'))
+      .filter((row) => row.closest('table') === table)
+      .map((row) => this.tableRowToMarkdownCells(row))
+      .filter((row) => row.length > 0);
+
+    if (rows.length === 0) return '';
+
+    const columnCount = Math.max(...rows.map((row) => row.length));
+    const normalizedRows = rows.map((row) => this.padTableRow(row, columnCount));
+    const [header, ...body] = normalizedRows;
+    const separator = Array.from({ length: columnCount }, () => '---');
+
+    return [header, separator, ...body].map((row) => `| ${row.join(' | ')} |`).join('\n');
+  }
+
+  private static tableRowToMarkdownCells(row: Element): string[] {
+    return Array.from(row.children)
+      .filter((child) => {
+        const tagName = child.tagName.toUpperCase();
+        return tagName === 'TH' || tagName === 'TD';
+      })
+      .map((cell) => this.escapeMarkdownTableCell(this.renderInlineChildren(cell).trim()));
+  }
+
+  private static padTableRow(row: string[], columnCount: number): string[] {
+    return [...row, ...Array.from({ length: columnCount - row.length }, () => '')];
+  }
+
+  private static escapeMarkdownTableCell(value: string): string {
+    return this.normalizeMarkdownSpacing(value).replace(/\|/g, '\\|').replace(/\n+/g, '<br>');
   }
 
   private static anchorToMarkdown(anchor: Element, text: string): string {

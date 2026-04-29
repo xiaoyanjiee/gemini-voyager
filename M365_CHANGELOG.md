@@ -1,7 +1,7 @@
 # M365 Copilot 变更与进度文档
 
 最后更新：2026-04-29
-当前状态：M365 canonical baseline、export adapter baseline、JSON / Markdown export UI 和 M365 chatWidth MVP 已落地，diagnostics 已改为手动 gate
+当前状态：M365 canonical baseline、export adapter baseline、JSON / Markdown export UI、M365 chatWidth MVP 和 rich content extraction 补强已落地，diagnostics 已改为手动 gate
 配套上下文：`M365_COPILOT_CONTEXT.md`
 
 后续 Codex 会话开始修改 M365 相关代码前，必须先阅读本文件和 `M365_COPILOT_CONTEXT.md`。任何改变 M365 selectors、canonical model、extractor 输出、export adapter、安全策略、浏览器验证流程或迁移优先级的任务，都必须同时更新这两个文档。
@@ -49,6 +49,7 @@
 - `M365ExportService.buildJsonExport()` 和 `serializeJsonExport()` 已能生成纯数据 M365 JSON payload/string。
 - `M365ExportService.buildMarkdownExport()` 和 `serializeMarkdownExport()` 已能生成包含 metadata 和 turns 的 M365 Markdown string。
 - M365 assistant 正文提取会把常见 HTML 结构保留为 Markdown 文本，包括段落空行、粗体、斜体、基础列表、基础链接和 code/pre。
+- M365 assistant table 提取已补强为 Markdown table，并会转义单元格内的 `|`。
 - `window.__gvExportM365Json()` / `window.__gvExportM365Markdown()` 是仅用于本地验证的 M365 debug/dev 入口，会下载当前页面 JSON / Markdown 并保存对应的 `window.__gvLastM365*Export`。
 - Export adapter 已接入 M365-only 最小 UI，支持 JSON / Markdown；不改变 Gemini export 行为。
 - M365 chatWidth MVP 已接入 M365-only 启动分支：只注入隔离 CSS 和 HTML marker，不读取消息正文、不依赖 canonical/export services、不改变 Gemini chatWidth；真实页面反馈初版未生效后，已追加外层 `chatMessageContainer...` 包装 div 的宽度覆盖。
@@ -253,7 +254,50 @@ Plan 内容：
 - 输入框是否正常、Copilot 原生按钮/顶部栏/侧边栏/菜单是否完全不受影响，仍需用户在真实已登录、有消息的 M365 conversation 中人工视觉确认。
 - 未来如 M365 DOM 布局变化，优先继续保守收紧 CSS selector，不引入 Gemini selector，也不读取消息正文。
 
+### 9. M365 rich content sample validation
+
+目标是验证并补强 M365 canonical extraction / JSON / Markdown export 在富内容对话中的表现，重点覆盖 image、code、table 和 link，同时保持 M365-only，不新增 UI，不做 timeline/PDF/Image export。
+
+Plan 内容：
+
+- 在现有 `M365ConversationExtractor` 内容渲染路径里补 table-to-Markdown，不新增 M365 DOM 扫描入口。
+- 扩展测试覆盖 `pre` fenced code block、inline `code`、safe/unsafe links、semantic table、table pipe escaping，以及 image metadata。
+- 真机验证只使用 `window.__gvExtractCanonical()`、`window.__gvExportM365Json()`、`window.__gvExportM365Markdown()`，不运行自动 diagnostics，不新增页面 UI。
+
+已完成：
+
+- `src/pages/content/m365ConversationExtractor.ts` 新增 semantic table Markdown 渲染：只收集当前 table 的直属 rows，按最大列数补齐，生成 Markdown header/separator/body，并转义单元格内的 `|`。
+- `src/pages/content/m365ChatExtractor.test.ts` 新增富内容 fixture，覆盖 code/pre、safe link、unsafe href 退化为纯文本、semantic table 和 image `currentSrc` / `alt` / `title` / size metadata。
+- JSON / Markdown export 仍只消费 `CanonicalConversation`；本轮没有改 `M365ExportService` 的 public payload shape，也没有把 DOM element 写入导出。
+
+当前限制：
+
+- 本轮没有接入 PDF/Image export，也没有新增 M365 UI。
+- 真实 image-message DOM 仍需要更多样本；本轮真实页面验证以 link/code/table 导出为主。
+
 ## 验证记录
+
+2026-04-29 M365 rich content extraction 补强后通过：
+
+```powershell
+npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts src/pages/content/m365ExportUi.test.ts src/pages/content/m365ChatWidth.test.ts
+npm.cmd run typecheck
+npm.cmd exec -- eslint src/pages/content/m365*.ts src/pages/content/m365*.test.ts
+npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md M365_CHANGELOG.md
+npm.cmd run build:chrome
+git diff --check
+```
+
+验证结果：
+
+- Targeted tests：4 个 test files、41 个 tests 全部通过。
+- `typecheck` 通过。
+- M365 目标文件 eslint 通过。
+- Prettier check 通过。
+- `build:chrome` 通过；沙箱内遇到已知 `esbuild spawn EPERM` 后，提升到真实 Windows 环境重跑同一条命令通过，Vite 仅输出既有 chunk/asset warnings。
+- `git diff --check` 通过。
+- 真机验证：Codex 在真实 M365 页面发送无敏感测试 prompt，请求 Copilot 返回 link、fenced code block 和 table；随后通过现有 M365 JSON / Markdown export helper 导出文件。用户检查 `D:/Downloads/m365-copilot-2026-04-29T05-55-37-676Z.json` 与 `D:/Downloads/m365-copilot-2026-04-29T05-55-37-678Z.md` 后确认两个文件正确。
+- 真实 image-message 样本仍 pending；本轮只保留自动化覆盖，不伪造 image 真机通过。
 
 2026-04-29 M365 chatWidth MVP 接入后通过：
 
@@ -390,9 +434,9 @@ git diff --check
 
 优先级从高到低：
 
-1. 在更多真实 M365 conversations 上验证 canonical extraction，尤其是 image/code/table/link 样本。
-2. 采集真实 M365 image-message DOM，确认图片尺寸、alt/title/currentSrc 行为。
-3. 只读验证 export adapter 在更多 conversation 上的 turns 输出，不接 UI。
+1. 采集真实 M365 image-message DOM，确认图片尺寸、alt/title/currentSrc 行为。
+2. 只读验证 export adapter 在更多 conversation 上的 turns 输出，不接 UI。
+3. 在更多真实 M365 conversations 上继续验证复杂 rich Markdown fidelity，尤其是嵌套列表、复杂表格和混合格式。
 4. 设计 M365 timeline markers，但数据源必须是 `CanonicalMessage`。
 5. 继续验证并收紧 M365 chatWidth MVP，只处理 CSS/layout；如果需要锚点，只使用 canonical source elements。
 6. 在准备生产发布前，重新评估是否删除 `m365Diagnostics.ts`，或继续保持手动 gate。

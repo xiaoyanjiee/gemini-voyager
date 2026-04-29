@@ -1,7 +1,7 @@
 # M365 Copilot 迁移架构基线
 
 最后更新：2026-04-29
-状态：M365 adapter 活跃基线，JSON / Markdown export MVP 与最小导出 UI 已接入，M365 chatWidth MVP 已接入
+状态：M365 adapter 活跃基线，JSON / Markdown export MVP 与最小导出 UI 已接入，M365 chatWidth MVP 已接入，rich content extraction 已补强
 目标站点：`https://m365.cloud.microsoft/*`
 
 这是后续 Codex 会话的交接文档。修改 M365 专用代码前，必须先阅读本文件。
@@ -20,6 +20,7 @@
 - 2026-04-28 已在 Windows 本地开发环境验证：`npm.cmd` 测试/构建可用，Edge 加载 `L:\project\dist_chrome` 后，`Voyager` isolated world 中存在 `window.__gvDiagRun()` / `window.__gvExtract()` / `window.__gvExtractCanonical()`。
 - `M365ExportService` 已提供只读 export adapter：从 `CanonicalConversation` 生成现有 `ChatTurn[]` 和 `ConversationMetadata`，支持 plain text、安全图片 Markdown、M365 JSON export MVP 和 M365 Markdown export MVP；M365 页面已接入 JSON / Markdown 最小导出 UI。
 - M365 assistant 正文提取会把常见 HTML 结构保留为 Markdown 文本，包括段落空行、`strong` / `b` 粗体、`em` / `i` 斜体、`ul` / `ol` 列表、基础链接和 fenced code block；仍不重新扫描 DOM，不复用 Gemini selectors。
+- M365 assistant table 提取已补强：semantic `table` / `tr` / `th` / `td` 会转成 Markdown table，并转义单元格内的 `|`，继续沿用 canonical extraction 路径。
 - 手动 JSON / Markdown 验证入口：`window.__gvExportM365Json()`、`window.__gvExportM365Markdown()`；这些入口仅用于本地 M365 debug/dev 真机测试，会下载当前页面导出结果并保存到对应的 `window.__gvLastM365*Export`。
 - M365 chatWidth MVP 已接入：`startM365ChatWidth()` 只在 `m365.cloud.microsoft` 分支启动，注入 `#gv-m365-chat-width-style` 并给 `document.documentElement` 添加 `gv-m365-chat-width-enabled`；CSS 只针对 M365 `chatMessageContainer...`、message article、`fai-UserMessage` / `fai-CopilotMessage` 容器，不读取消息正文、不复用 Gemini selectors、不修改 Gemini chatWidth 行为。
 
@@ -285,7 +286,7 @@ Windows 环境注意事项：
 ## 已知缺口
 
 - 真实 M365 image-message DOM 仍需要更多样本采集和验证。
-- Tables 和更复杂 rich Markdown fidelity 仍需要更多真实样本；当前已覆盖段落、粗体、斜体、基础列表、基础链接、code/pre 和 images。
+- 更复杂 rich Markdown fidelity 仍需要更多真实样本；当前已覆盖段落、粗体、斜体、基础列表、基础链接、code/pre、semantic table 和 images。
 - Conversation loading 可能滞后于 URL 变化；未来 UI entrypoints 需要围绕 `[role="article"]` 做 wait/retry。
 - M365 chatWidth MVP 初版只打到 article 层，真实页面仍被外层 `chatMessageContainer...` 包装 div 限制宽度；已追加容器层 CSS，fresh Edge + 最新 `dist_chrome` 的 CDP smoke 确认 message container 为 `1440px`、assistant content 约 `1388px`、user content 约 `1368px`。仍需要在更多真实、已登录、有消息的 M365 conversations 上做人工视觉确认。
 - Sidebar/conversation traversal 仍然延期。
@@ -384,6 +385,14 @@ git diff --check
 - 本次不接设置面板、不写 storage、不做 timeline、PDF、Image export，也不修改 M365 消息提取、JSON/Markdown export UI 或 Gemini chatWidth。
 - 2026-04-29 自动化验证通过：M365 4 个 test files、40 个 tests 全部通过；`typecheck`、M365 eslint、Prettier check、`build:chrome`、`git diff --check` 通过。`build:chrome` 在沙箱内遇到已知 `esbuild spawn EPERM`，提升到真实 Windows 环境后重跑通过。
 - 2026-04-29 CDP smoke test：新 Edge profile 加载 `L:\project\dist_chrome` 打开 M365 chat 后，确认 `#gv-m365-chat-width-style` 数量为 1、HTML marker 存在、style 包含 M365 selectors 且不含 Gemini selectors、右上角 export UI root 仍存在。用户随后反馈加宽未生效；CDP 检查确认外层 `chatMessageContainer...` 仍有约 `852px` max-width，修正后用最新 `dist_chrome` 打开 fresh Edge 验证：message container 为 `1440px`，assistant article 为 `1436px`，assistant content 为 `1388px`，user content 为 `1368px`。输入框可用、顶部栏/侧边栏/菜单未破坏仍需用户在真实对话页人工确认。
+
+## 2026-04-29 M365 rich content sample validation
+
+- 本轮补强范围只覆盖 M365 canonical extraction / JSON / Markdown export 的富内容样本，不新增 UI、不做 timeline、PDF 或 Image export，也不修改 Gemini 行为。
+- `src/pages/content/m365ConversationExtractor.ts` 已把 semantic table 转为 Markdown table；表格行只读取当前 table 直属行，单元格内 `|` 会转义，多行内容会压缩为 `<br>`。
+- 自动化测试已覆盖 code/pre、safe/unsafe links、semantic table、table pipe escaping、image `src/currentSrc/alt/title/size` metadata，以及小 icon / toolbar image 过滤。
+- 真实 M365 页面验证：Codex 发送了一条无敏感测试 prompt，请求 Copilot 返回 link、fenced code block 和 table；用户检查 `D:/Downloads/m365-copilot-2026-04-29T05-55-37-676Z.json` 与 `D:/Downloads/m365-copilot-2026-04-29T05-55-37-678Z.md` 后确认两个导出文件正确。
+- 真实 image-message 样本仍 pending；本轮没有把 PDF/Image export 接入产品路径。
 
 后续更新规则：
 

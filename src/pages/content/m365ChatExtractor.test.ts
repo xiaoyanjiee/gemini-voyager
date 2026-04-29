@@ -141,6 +141,54 @@ describe('extractM365Messages', () => {
     );
   });
 
+  it('preserves code, safe links, and semantic tables as Markdown text', () => {
+    document.body.innerHTML = `
+      <article role="article" class="fai-CopilotMessage">
+        <div class="fai-CopilotMessage__content">
+          <p>Use <code>npm.cmd test</code> for the focused run.</p>
+          <p>See <a href="https://learn.microsoft.com/microsoft-365/">M365 docs</a> and <a href="javascript:alert(1)">unsafe docs</a>.</p>
+          <pre><code>const ok = true;
+console.log(ok);</code></pre>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>JSON | Markdown</td>
+                <td>Ready</td>
+              </tr>
+              <tr>
+                <td>PDF</td>
+                <td>Deferred</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    `;
+
+    const result = extractM365Messages();
+
+    expect(result.totalMessages).toBe(1);
+    expect(result.messages[0].text).toBe(
+      [
+        'Use `npm.cmd test` for the focused run.',
+        'See [M365 docs](https://learn.microsoft.com/microsoft-365/) and unsafe docs.',
+        ['```', 'const ok = true;', 'console.log(ok);', '```'].join('\n'),
+        [
+          '| Name | Status |',
+          '| --- | --- |',
+          '| JSON \\| Markdown | Ready |',
+          '| PDF | Deferred |',
+        ].join('\n'),
+      ].join('\n\n'),
+    );
+  });
+
   it('removes assistant chrome, chain-of-thought controls, and feedback actions from extracted text', () => {
     document.body.innerHTML = `
       <article role="article" class="fai-CopilotMessage">
@@ -244,10 +292,30 @@ describe('extractM365Messages', () => {
     document.body.innerHTML = `
       <article role="article" class="fai-CopilotMessage">
         <div class="fai-CopilotMessage__content">
-          <img src="https://example.test/generated.png" alt="Generated chart" width="640" height="480" />
+          <img
+            src="https://example.test/generated.png"
+            alt="Generated chart"
+            title="Quarterly chart"
+            width="640"
+            height="480"
+          />
         </div>
       </article>
     `;
+
+    const image = document.querySelector('img');
+    Object.defineProperty(image, 'currentSrc', {
+      configurable: true,
+      value: 'https://cdn.example.test/generated-current.png',
+    });
+    Object.defineProperty(image, 'naturalWidth', {
+      configurable: true,
+      value: 1280,
+    });
+    Object.defineProperty(image, 'naturalHeight', {
+      configurable: true,
+      value: 960,
+    });
 
     const conversation = extractM365CanonicalConversation();
 
@@ -259,7 +327,13 @@ describe('extractM365Messages', () => {
       expect.objectContaining({
         kind: 'image',
         src: 'https://example.test/generated.png',
+        currentSrc: 'https://cdn.example.test/generated-current.png',
         alt: 'Generated chart',
+        title: 'Quarterly chart',
+        width: 640,
+        height: 480,
+        naturalWidth: 1280,
+        naturalHeight: 960,
       }),
     ]);
   });
