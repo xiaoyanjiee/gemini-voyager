@@ -183,6 +183,29 @@ describe('M365 minimal export UI', () => {
     expect(serializeJsonExport).toHaveBeenCalledWith(conversation, 'M365 Copilot');
   });
 
+  it('uses a stable default title instead of the M365 page prompt title', () => {
+    document.title = 'User prompt should not become export title';
+    const conversation = createExportableConversation();
+    const downloadText = vi.fn();
+
+    const result = runM365ExportAction('markdown', {
+      extractConversation: () => conversation,
+      buildTurns: M365ExportService.buildTurns.bind(M365ExportService),
+      downloadText,
+      showStatus: vi.fn(),
+      now: () => new Date('2026-04-29T01:02:03.004Z'),
+    });
+
+    expect(result.status).toBe('downloaded');
+    expect(result.content).toContain('# M365 Copilot');
+    expect(result.content).not.toContain('User prompt should not become export title');
+    expect(downloadText).toHaveBeenCalledWith(
+      expect.stringContaining('# M365 Copilot'),
+      'M365 Copilot-2026-04-29T01-02-03-004Z.md',
+      'text/markdown;charset=utf-8',
+    );
+  });
+
   it('downloads serialized content without DOM leakage markers', () => {
     const conversation = createExportableConversation();
     const downloadText = vi.fn();

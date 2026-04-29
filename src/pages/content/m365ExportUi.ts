@@ -58,7 +58,7 @@ export function buildM365ExportFilename(
 }
 
 function getM365ExportTitle(): string {
-  return sanitizeM365ExportFilenameBase(document.title || DEFAULT_M365_EXPORT_TITLE);
+  return DEFAULT_M365_EXPORT_TITLE;
 }
 
 function downloadText(content: string, filename: string, type: string): void {

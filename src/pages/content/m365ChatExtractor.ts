@@ -99,7 +99,7 @@ export function extractM365Messages(): ExtractResult {
 }
 
 function getM365ExportTitle(): string {
-  return document.title.trim() || DEFAULT_M365_EXPORT_TITLE;
+  return DEFAULT_M365_EXPORT_TITLE;
 }
 
 function buildM365ExportFilename(timestamp: string, extension: 'json' | 'md'): string {

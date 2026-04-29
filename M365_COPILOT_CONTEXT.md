@@ -21,6 +21,8 @@
 - `M365ExportService` 已提供只读 export adapter：从 `CanonicalConversation` 生成现有 `ChatTurn[]` 和 `ConversationMetadata`，支持 plain text、安全图片 Markdown、M365 JSON export MVP 和 M365 Markdown export MVP；M365 页面已接入 JSON / Markdown 最小导出 UI。
 - M365 assistant 正文提取会把常见 HTML 结构保留为 Markdown 文本，包括段落空行、`strong` / `b` 粗体、`em` / `i` 斜体、`ul` / `ol` 列表、基础链接和 fenced code block；仍不重新扫描 DOM，不复用 Gemini selectors。
 - M365 assistant table 提取已补强：semantic `table` / `tr` / `th` / `td` 会转成 Markdown table，并转义单元格内的 `|`，继续沿用 canonical extraction 路径。
+- M365 Markdown export 标题固定使用 `M365 Copilot`，不再读取 M365 页面 `document.title`；M365 页面标题经常是首条 prompt，直接用作 Markdown H1 会让预览标题变成用户输入。
+- M365 code block 提取已补强：`pre` 和多行 `code` 会输出 fenced code block；M365 偶发的语言标签 + 代码 + 残缺反引号片段会归一为标准 fenced block。
 - 手动 JSON / Markdown 验证入口：`window.__gvExportM365Json()`、`window.__gvExportM365Markdown()`；这些入口仅用于本地 M365 debug/dev 真机测试，会下载当前页面导出结果并保存到对应的 `window.__gvLastM365*Export`。
 - M365 chatWidth MVP 已接入：`startM365ChatWidth()` 只在 `m365.cloud.microsoft` 分支启动，注入 `#gv-m365-chat-width-style` 并给 `document.documentElement` 添加 `gv-m365-chat-width-enabled`；CSS 只针对 M365 `chatMessageContainer...`、message article、`fai-UserMessage` / `fai-CopilotMessage` 容器，不读取消息正文、不复用 Gemini selectors、不修改 Gemini chatWidth 行为。
 
@@ -286,7 +288,7 @@ Windows 环境注意事项：
 ## 已知缺口
 
 - 真实 M365 image-message DOM 仍需要更多样本采集和验证。
-- 更复杂 rich Markdown fidelity 仍需要更多真实样本；当前已覆盖段落、粗体、斜体、基础列表、基础链接、code/pre、semantic table 和 images。
+- 更复杂 rich Markdown fidelity 仍需要更多真实样本；当前已覆盖段落、粗体、斜体、基础列表、基础链接、code/pre、多行 code、M365 残缺 code-fence 片段、semantic table 和 images。
 - Conversation loading 可能滞后于 URL 变化；未来 UI entrypoints 需要围绕 `[role="article"]` 做 wait/retry。
 - M365 chatWidth MVP 初版只打到 article 层，真实页面仍被外层 `chatMessageContainer...` 包装 div 限制宽度；已追加容器层 CSS，fresh Edge + 最新 `dist_chrome` 的 CDP smoke 确认 message container 为 `1440px`、assistant content 约 `1388px`、user content 约 `1368px`。仍需要在更多真实、已登录、有消息的 M365 conversations 上做人工视觉确认。
 - Sidebar/conversation traversal 仍然延期。
@@ -390,8 +392,10 @@ git diff --check
 
 - 本轮补强范围只覆盖 M365 canonical extraction / JSON / Markdown export 的富内容样本，不新增 UI、不做 timeline、PDF 或 Image export，也不修改 Gemini 行为。
 - `src/pages/content/m365ConversationExtractor.ts` 已把 semantic table 转为 Markdown table；表格行只读取当前 table 直属行，单元格内 `|` 会转义，多行内容会压缩为 `<br>`。
-- 自动化测试已覆盖 code/pre、safe/unsafe links、semantic table、table pipe escaping、image `src/currentSrc/alt/title/size` metadata，以及小 icon / toolbar image 过滤。
+- `src/pages/content/m365ChatExtractor.ts` 和 `src/pages/content/m365ExportUi.ts` 已改为稳定默认标题 `M365 Copilot`，避免 M365 `document.title` 把用户 prompt 作为 Markdown H1 或文件名。
+- 自动化测试已覆盖 code/pre、多行 code、M365 残缺 code-fence 片段、safe/unsafe links、semantic table、table pipe escaping、image `src/currentSrc/alt/title/size` metadata，以及小 icon / toolbar image 过滤。
 - 真实 M365 页面验证：Codex 发送了一条无敏感测试 prompt，请求 Copilot 返回 link、fenced code block 和 table；用户检查 `D:/Downloads/m365-copilot-2026-04-29T05-55-37-676Z.json` 与 `D:/Downloads/m365-copilot-2026-04-29T05-55-37-678Z.md` 后确认两个导出文件正确。
+- 随后发现该 `.md` 在 VS Code 预览中标题变成 prompt，且 code block 残留不完整反引号；原因是导出标题取了 M365 页面标题，且 M365 code block DOM 没有稳定落到标准 `<pre>`。本轮已用稳定标题和 code-fence 归一化修复。
 - 真实 image-message 样本仍 pending；本轮没有把 PDF/Image export 接入产品路径。
 
 后续更新规则：

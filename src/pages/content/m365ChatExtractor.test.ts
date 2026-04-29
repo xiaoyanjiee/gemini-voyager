@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { extractM365CanonicalConversation, extractM365Messages } from './m365ChatExtractor';
+import {
+  extractM365CanonicalConversation,
+  extractM365Messages,
+  startM365ChatExtractor,
+} from './m365ChatExtractor';
 
 describe('extractM365Messages', () => {
   beforeEach(() => {
@@ -185,6 +189,30 @@ console.log(ok);</code></pre>
           '| JSON \\| Markdown | Ready |',
           '| PDF | Deferred |',
         ].join('\n'),
+      ].join('\n\n'),
+    );
+  });
+
+  it('normalizes M365 code block fragments into fenced Markdown', () => {
+    document.body.innerHTML = `
+      <article role="article" class="fai-CopilotMessage">
+        <div class="fai-CopilotMessage__content">
+          <div>JSON</div>
+          <div>{<br />"status": "ok"<br />}</div>
+          <div>\`\`</div>
+          <code>const ready = true;
+console.log(ready);</code>
+        </div>
+      </article>
+    `;
+
+    const result = extractM365Messages();
+
+    expect(result.totalMessages).toBe(1);
+    expect(result.messages[0].text).toBe(
+      [
+        ['```json', '{', '"status": "ok"', '}', '```'].join('\n'),
+        ['```', 'const ready = true;', 'console.log(ready);', '```'].join('\n'),
       ].join('\n\n'),
     );
   });
@@ -401,5 +429,28 @@ console.log(ok);</code></pre>
     expect(second.messages.map((message) => message.fingerprint)).toEqual(
       first.messages.map((message) => message.fingerprint),
     );
+  });
+
+  it('uses a stable default title for M365 debug Markdown export', () => {
+    document.title = 'User prompt should not become export title';
+    document.body.innerHTML = `
+      <article role="article" class="fai-CopilotMessage">
+        <div class="fai-CopilotMessage__content">stable answer</div>
+      </article>
+    `;
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    startM365ChatExtractor();
+    const result = (
+      window as unknown as {
+        __gvExportM365Markdown: () => { filename: string; markdown: string };
+      }
+    ).__gvExportM365Markdown();
+
+    expect(result.filename).toMatch(/^m365-copilot-/);
+    expect(result.markdown).toContain('# M365 Copilot');
+    expect(result.markdown).not.toContain('User prompt should not become export title');
   });
 });

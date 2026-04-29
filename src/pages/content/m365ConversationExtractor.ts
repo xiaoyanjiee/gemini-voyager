@@ -147,7 +147,9 @@ export class M365ConversationExtractor {
   }
 
   private static elementToMarkdownText(el: Element): string {
-    return this.normalizeMarkdownSpacing(this.renderChildNodes(el));
+    return this.normalizeMarkdownSpacing(
+      this.normalizeMalformedCodeFenceFragments(this.renderChildNodes(el)),
+    );
   }
 
   private static renderChildNodes(el: Element): string {
@@ -172,7 +174,7 @@ export class M365ConversationExtractor {
 
     if (tagName === 'PRE') {
       const code = node.textContent?.replace(/\r\n?/g, '\n').trim();
-      return code ? `\`\`\`\n${code}\n\`\`\`` : '';
+      return code ? this.codeToMarkdownBlock(code) : '';
     }
 
     if (tagName === 'TABLE') {
@@ -196,7 +198,9 @@ export class M365ConversationExtractor {
     }
 
     if (tagName === 'CODE') {
-      return `\`${childText.replace(/`/g, '\\`')}\``;
+      return childText.includes('\n')
+        ? this.codeToMarkdownBlock(childText)
+        : `\`${childText.replace(/`/g, '\\`')}\``;
     }
 
     if (tagName === 'A') {
@@ -273,6 +277,23 @@ export class M365ConversationExtractor {
 
   private static escapeMarkdownTableCell(value: string): string {
     return this.normalizeMarkdownSpacing(value).replace(/\|/g, '\\|').replace(/\n+/g, '<br>');
+  }
+
+  private static codeToMarkdownBlock(code: string, language = ''): string {
+    const normalizedCode = code.replace(/\r\n?/g, '\n').trim();
+    const normalizedLanguage = language.trim().toLowerCase();
+    const fence = normalizedCode.includes('```') ? '````' : '```';
+    return normalizedLanguage
+      ? `${fence}${normalizedLanguage}\n${normalizedCode}\n${fence}`
+      : `${fence}\n${normalizedCode}\n${fence}`;
+  }
+
+  private static normalizeMalformedCodeFenceFragments(text: string): string {
+    return text.replace(
+      /(^|\n\n)(json|javascript|typescript|python|bash|shell|powershell|html|css|sql|xml|yaml|markdown|text)\n\n([\s\S]*?)\n\n`{1,2}(?=\n\n|$)/gi,
+      (_match, prefix: string, language: string, code: string) =>
+        `${prefix}${this.codeToMarkdownBlock(code, language)}`,
+    );
   }
 
   private static anchorToMarkdown(anchor: Element, text: string): string {
