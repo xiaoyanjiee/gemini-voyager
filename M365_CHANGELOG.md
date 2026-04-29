@@ -31,6 +31,7 @@
 
 最近关键提交：
 
+- `99c3af2 feat(m365): add minimal export ui`
 - `09580fc fix(m365): gate diagnostics and tighten image URLs`
 - `90c892c docs(m365): absorb migration plans into context`
 - `8d02fb0 feat(m365): add export adapter baseline`
@@ -220,7 +221,7 @@ Plan 内容：
 
 当前限制：
 
-- 真实 M365 页面上的人工点击验证仍需在 build 后加载 `L:\project\dist_chrome` 到 Edge，并在登录态 M365 Copilot 页面操作 UI。
+- 真实 M365 页面 smoke test 已确认右上角 UI 可见，JSON / Markdown 点击下载正常；未来仍需在更多真实 conversations 上补充内容质量验证。
 - PDF、Image export、timeline、chatWidth 仍延期。
 
 ## 验证记录
@@ -243,6 +244,7 @@ npm.cmd run build:chrome
 - Prettier check 通过。
 - `build:chrome` 通过；Vite 仅输出既有 chunk/asset warnings。
 - Codex sandbox 运行 Vitest 和 `build:chrome` 时遇到已知 `esbuild spawn EPERM`，提升到真实 Windows 环境后重跑同一条 `npm.cmd` 命令通过。
+- 真机 smoke test：Codex 启动独立 Edge 测试窗口，加载 `L:\project\dist_chrome` 并打开 M365 Copilot；用户确认右上角 `Export JSON` / `Export Markdown` 最小 UI 可见，两个按钮点击下载结果均正常。
 
 2026-04-29 M365 Markdown HTML 结构保真修复后通过：
 

@@ -357,9 +357,10 @@ git diff --check
 
 最近一次真机验证：
 
-- 2026-04-29，Edge 加载 `L:\project\dist_chrome` 并 reload extension 后，在 `Voyager` isolated world 运行 `window.__gvExportM365Markdown()`。
-- 导出文件 `m365-copilot-2026-04-28T16-23-59-118Z.md` 包含 title、platform、url、exportedAt、count、turn headings、`### User`、`### Assistant`、`**粗体**`、`- 列表` 和段落空行。
-- 机器检查确认不包含 DOM 泄漏标记，用户人工查看后确认“新版正常”。
+- 2026-04-29，Codex 启动独立 Edge 测试窗口，加载 `L:\project\dist_chrome`，并打开 `https://m365.cloud.microsoft/chat`。
+- 用户在真实 M365 Copilot 页面确认右上角最小导出 UI 可见，`Export JSON` 和 `Export Markdown` 两个按钮点击后均能正常导出文件。
+- 这标记 M365 最小导出 UI 的真实页面 smoke test 通过；更深入的内容校验仍可在未来针对更多真实 conversations 继续补充。
+- 上一次 Markdown helper 真机验证：Edge reload `L:\project\dist_chrome` 后，在 `Voyager` isolated world 运行 `window.__gvExportM365Markdown()`；导出文件包含 title、platform、url、exportedAt、count、turn headings、`### User`、`### Assistant`、`**粗体**`、`- 列表` 和段落空行，且机器检查确认不包含 DOM 泄漏标记。
 
 ## 2026-04-29 M365 minimal export UI
 
@@ -368,6 +369,7 @@ git diff --check
 - 导出 action 继续消费 `extractM365CanonicalConversation()` 产出的 `CanonicalConversation`，并只调用 `M365ExportService.serializeJsonExport()` / `serializeMarkdownExport()`；不会重新扫描 M365 DOM，也不会复用 Gemini selector。
 - 空 conversation 或无可导出 turns 时只显示轻量状态提示，不下载空文件。
 - 文件名会使用页面标题或默认 `M365 Copilot`，清理 Windows 非法文件名字符和保留名，并追加 ISO 日期时间后缀。
+- 2026-04-29 真机 smoke test 已确认右上角 UI 可见，JSON / Markdown 按钮点击下载正常。
 - PDF、Image export、timeline、chatWidth 仍未接入；这次只完成 JSON / Markdown 最小 UI。
 
 后续更新规则：
