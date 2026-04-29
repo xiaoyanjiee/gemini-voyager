@@ -1,7 +1,7 @@
 # M365 Copilot 变更与进度文档
 
 最后更新：2026-04-29
-当前状态：M365 canonical baseline、export adapter baseline、JSON export MVP 和 Markdown export MVP 底层能力已落地，diagnostics 已改为手动 gate
+当前状态：M365 canonical baseline、export adapter baseline、JSON / Markdown export UI 和 M365 chatWidth MVP 已落地，diagnostics 已改为手动 gate
 配套上下文：`M365_COPILOT_CONTEXT.md`
 
 后续 Codex 会话开始修改 M365 相关代码前，必须先阅读本文件和 `M365_COPILOT_CONTEXT.md`。任何改变 M365 selectors、canonical model、extractor 输出、export adapter、安全策略、浏览器验证流程或迁移优先级的任务，都必须同时更新这两个文档。
@@ -51,6 +51,7 @@
 - M365 assistant 正文提取会把常见 HTML 结构保留为 Markdown 文本，包括段落空行、粗体、斜体、基础列表、基础链接和 code/pre。
 - `window.__gvExportM365Json()` / `window.__gvExportM365Markdown()` 是仅用于本地验证的 M365 debug/dev 入口，会下载当前页面 JSON / Markdown 并保存对应的 `window.__gvLastM365*Export`。
 - Export adapter 已接入 M365-only 最小 UI，支持 JSON / Markdown；不改变 Gemini export 行为。
+- M365 chatWidth MVP 已接入 M365-only 启动分支：只注入隔离 CSS 和 HTML marker，不读取消息正文、不依赖 canonical/export services、不改变 Gemini chatWidth。
 
 ## 阶段变更记录
 
@@ -222,9 +223,58 @@ Plan 内容：
 当前限制：
 
 - 真实 M365 页面 smoke test 已确认右上角 UI 可见，JSON / Markdown 点击下载正常；未来仍需在更多真实 conversations 上补充内容质量验证。
-- PDF、Image export、timeline、chatWidth 仍延期。
+- PDF、Image export、timeline 仍延期；chatWidth 已由后续 M365-only MVP 接入。
+
+### 8. M365 chatWidth MVP
+
+目标是在 `m365.cloud.microsoft` 页面提供一个轻量、可回滚的对话宽度增强，让宽屏下的 M365 Copilot 聊天内容更舒展，同时冻结现有 JSON / Markdown 导出主线。
+
+Plan 内容：
+
+- 只做 M365 页面布局增强，不做设置面板、timeline、PDF、Image export，不重构 export UI。
+- 不修改 Gemini chatWidth、Gemini export、Gemini timeline，也不复用 Gemini selectors。
+- 新增 `startM365ChatWidth()`，只在 `index.tsx` 的 `m365.cloud.microsoft` 分支启动。
+- 注入独立 style id `gv-m365-chat-width-style`，使用 HTML marker class `gv-m365-chat-width-enabled`。
+- CSS 只针对 M365 message article / `fai-UserMessage` / `fai-CopilotMessage` 容器，默认固定 wide mode，幂等注入。
+- 不读取消息正文，不依赖 `CanonicalConversation` 或 `M365ExportService`，不改变 M365 消息提取逻辑。
+
+已完成：
+
+- 新增 `src/pages/content/m365ChatWidth.ts`，暴露 `startM365ChatWidth()` 和 `stopM365ChatWidth()`。
+- `startM365ChatWidth()` 给 `document.documentElement` 添加 `gv-m365-chat-width-enabled`，并只注入一个 `#gv-m365-chat-width-style`。
+- CSS 范围限定在 `html.gv-m365-chat-width-enabled` 下，使用 `[role="article"]`、`fai-UserMessage`、`fai-CopilotMessage`、`fai-UserMessage__message`、`fai-CopilotMessage__content`，宽度上限为保守的 `1440px`。
+- `src/pages/content/index.tsx` 只在 M365 分支调用 `startM365ChatWidth()`；Gemini 分支仍使用原 `startChatWidthAdjuster()`。
+- 新增 `src/pages/content/m365ChatWidth.test.ts`，覆盖 style/marker 幂等、M365-only selector、Gemini selector/storage 禁止、export UI root 不被修改、无 canonical/export/message body 依赖，以及 cleanup。
+
+当前限制：
+
+- fresh Edge profile 的 CDP smoke test 已确认 style/marker/export UI 注入状态正确，但该 profile 没有实际对话消息。
+- 聊天区域是否“明显变宽”、输入框是否正常、Copilot 原生按钮/顶部栏/侧边栏/菜单是否完全不受影响，仍需用户在真实已登录、有消息的 M365 conversation 中人工视觉确认。
+- 未来如 M365 DOM 布局变化，优先继续保守收紧 CSS selector，不引入 Gemini selector，也不读取消息正文。
 
 ## 验证记录
+
+2026-04-29 M365 chatWidth MVP 接入后通过：
+
+```powershell
+npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts src/pages/content/m365ExportUi.test.ts src/pages/content/m365ChatWidth.test.ts
+npm.cmd run typecheck
+npm.cmd exec -- eslint src/pages/content/m365*.ts src/pages/content/m365*.test.ts
+npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md M365_CHANGELOG.md
+npm.cmd run build:chrome
+git diff --check
+```
+
+验证结果：
+
+- Targeted tests：4 个 test files，40 个 tests 全部通过。
+- `typecheck` 通过。
+- M365 目标文件 eslint 通过。
+- Prettier check 通过。
+- `build:chrome` 通过；沙箱内先遇到已知 `esbuild spawn EPERM`，提升到真实 Windows 环境重跑同一条命令通过，Vite 仅输出既有 chunk/asset warnings。
+- `git diff --check` 通过。
+- 真实页面 CDP smoke test：新 Edge profile 加载 `L:\project\dist_chrome` 并打开 `https://m365.cloud.microsoft/chat?redirfrom=CsrToSSR`；机器检查确认 `#gv-m365-chat-width-style` 数量为 1、`gv-m365-chat-width-enabled` marker 存在、style 包含 M365 selectors 且不含 Gemini selectors、右上角 export UI root 仍存在。
+- 真实视觉验收剩余项：fresh profile 当前没有对话消息；聊天内容明显变宽、输入框可用、顶部栏/侧边栏/菜单未被破坏，需要用户在真实已登录对话页人工确认后再回写。
 
 2026-04-29 M365 最小导出 UI 接入后通过：
 
@@ -342,7 +392,7 @@ git diff --check
 2. 采集真实 M365 image-message DOM，确认图片尺寸、alt/title/currentSrc 行为。
 3. 只读验证 export adapter 在更多 conversation 上的 turns 输出，不接 UI。
 4. 设计 M365 timeline markers，但数据源必须是 `CanonicalMessage`。
-5. 设计 M365 layout enhancer，只处理 CSS/layout；如果需要锚点，只使用 canonical source elements。
+5. 继续验证并收紧 M365 chatWidth MVP，只处理 CSS/layout；如果需要锚点，只使用 canonical source elements。
 6. 在准备生产发布前，重新评估是否删除 `m365Diagnostics.ts`，或继续保持手动 gate。
 
 ## 给下一位 Codex 的提醒
