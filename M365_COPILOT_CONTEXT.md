@@ -396,6 +396,7 @@ git diff --check
 - 自动化测试已覆盖 code/pre、多行 code、M365 残缺 code-fence 片段、safe/unsafe links、semantic table、table pipe escaping、image `src/currentSrc/alt/title/size` metadata，以及小 icon / toolbar image 过滤。
 - 真实 M365 页面验证：Codex 发送了一条无敏感测试 prompt，请求 Copilot 返回 link、fenced code block 和 table；用户检查 `D:/Downloads/m365-copilot-2026-04-29T05-55-37-676Z.json` 与 `D:/Downloads/m365-copilot-2026-04-29T05-55-37-678Z.md` 后确认两个导出文件正确。
 - 随后发现该 `.md` 在 VS Code 预览中标题变成 prompt，且 code block 残留不完整反引号；原因是导出标题取了 M365 页面标题，且 M365 code block DOM 没有稳定落到标准 `<pre>`。本轮已用稳定标题和 code-fence 归一化修复。
+- 修复后真机复测：加载最新 `L:\project\dist_chrome` 后，在真实 M365 页面发送无敏感测试 prompt 并导出 `m365-copilot-2026-04-29T09-36-28-344Z.json` / `m365-copilot-2026-04-29T09-36-28-346Z.md`；机器检查确认 JSON 可 parse、`platform === "m365-copilot"`、title 为 `M365 Copilot`、Markdown 以 `# M365 Copilot` 开头且不是 prompt、包含 ```json fenced code block、无残缺反引号尾巴、包含表格与 `JSON \| Markdown` 转义单元格、包含 https link、无 DOM 字段泄漏、export UI root 为 1、chatWidth style 为 1、diagnostics marker 为 0。
 - 真实 image-message 样本仍 pending；本轮没有把 PDF/Image export 接入产品路径。
 
 后续更新规则：

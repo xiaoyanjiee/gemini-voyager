@@ -302,6 +302,7 @@ git diff --check
 - `git diff --check` 通过。
 - 真机验证：Codex 在真实 M365 页面发送无敏感测试 prompt，请求 Copilot 返回 link、fenced code block 和 table；随后通过现有 M365 JSON / Markdown export helper 导出文件。用户检查 `D:/Downloads/m365-copilot-2026-04-29T05-55-37-676Z.json` 与 `D:/Downloads/m365-copilot-2026-04-29T05-55-37-678Z.md` 后确认两个文件正确。
 - 预览异常修复：用户随后发现 `.md` 在 VS Code 预览中 H1 变成 prompt，且 code block 没有形成标准 fenced block。原因是导出标题读取了 M365 `document.title`，并且真实 M365 code block 没有稳定落入现有 `<pre>` 分支。本轮已改为稳定标题并补充 code-fence 归一化。
+- 修复后真机复测：Codex 启动 Edge 加载最新 `L:\project\dist_chrome`，在真实 M365 页面发送无敏感测试 prompt，并通过现有 helper 导出 `m365-copilot-2026-04-29T09-36-28-344Z.json` / `m365-copilot-2026-04-29T09-36-28-346Z.md`。机器检查确认 JSON 可 parse、`platform === "m365-copilot"`、title 为 `M365 Copilot`、Markdown 以 `# M365 Copilot` 开头且不是 prompt、包含 ```json fenced code block、无残缺反引号尾巴、包含表格与 `JSON \| Markdown` 转义单元格、包含 https link、无 DOM 字段泄漏、export UI root 为 1、chatWidth style 为 1、diagnostics marker 为 0。
 - 真实 image-message 样本仍 pending；本轮只保留自动化覆盖，不伪造 image 真机通过。
 
 2026-04-29 M365 chatWidth MVP 接入后通过：
