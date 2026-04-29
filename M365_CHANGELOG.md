@@ -55,7 +55,7 @@
 - `window.__gvExportM365Json()` / `window.__gvExportM365Markdown()` 是仅用于本地验证的 M365 debug/dev 入口，会下载当前页面 JSON / Markdown 并保存对应的 `window.__gvLastM365*Export`。
 - Export adapter 已接入 M365-only 最小 UI，支持 JSON / Markdown；不改变 Gemini export 行为。
 - M365 chatWidth MVP 已接入 M365-only 启动分支：只注入隔离 CSS 和 HTML marker，不读取消息正文、不依赖 canonical/export services、不改变 Gemini chatWidth；真实页面反馈初版未生效后，已追加外层 `chatMessageContainer...` 包装 div 的宽度覆盖。
-- M365 timeline MVP 已接入 M365-only 启动分支：基于 `extractM365CanonicalConversation()` 和 `M365TimelineService.buildIndex()` 生成 user-message markers，点击 marker 滚动到对应 `CanonicalMessage.sourceElement`，不复用 Gemini timeline selectors/storage/UI state。
+- M365 timeline MVP 已接入 M365-only 启动分支：基于 `extractM365CanonicalConversation()` 和 `M365TimelineService.buildIndex()` 生成 user-message markers，点击 marker 滚动到对应 `CanonicalMessage.sourceElement`，不复用 Gemini timeline selectors/storage/UI state；已按 conversation URL 缓存已见 markers，避免 M365 虚拟列表卸载不可见消息时节点缩水或标题漂移。
 
 ## 阶段变更记录
 
@@ -297,12 +297,14 @@ Plan 内容：
 已完成：
 
 - `src/pages/content/m365Timeline.ts` 已实现 M365-only timeline root/style/tooltip、user marker 渲染、tooltip、click-to-scroll、active marker 和 cleanup。
+- `src/pages/content/m365Timeline.ts` 已补强 M365 虚拟列表场景：timeline 不再把当前可见 DOM 当作完整时间轴，而是按 conversation URL 缓存已见 user markers；当前 DOM 窗口只刷新可见 marker 的 source element，不会覆盖已见 marker 标题。
 - `src/pages/content/index.tsx` 已在 M365 分支调用 `startM365Timeline()`；Gemini timeline/export/sidebar/chatWidth 启动逻辑保持不变。
-- `src/pages/content/m365Timeline.test.ts` 覆盖 root/style/tooltip 幂等注入、只渲染 user markers、点击 canonical source element 滚动、tooltip 无 DOM 泄漏、export UI root 不被修改、无 Gemini selector/storage 引用，以及 `stopM365Timeline()` cleanup。
+- `src/pages/content/m365Timeline.test.ts` 覆盖 root/style/tooltip 幂等注入、只渲染 user markers、点击 canonical source element 滚动、tooltip 无 DOM 泄漏、export UI root 不被修改、无 Gemini selector/storage 引用、M365 虚拟列表卸载后的 marker 保留，以及 `stopM365Timeline()` cleanup。
 
 当前限制：
 
 - MVP 只显示 user-message markers，不做 assistant marker、滚动同步高亮、持久化状态或快捷键。
+- 已见但当前 DOM 不可见的 marker 会保留为 stale marker；如果对应 `sourceElement` 尚未被 M365 重新挂载，点击时无法立即滚动到该旧消息。后续如要支持“点击旧 marker 触发 M365 加载历史”，需要额外研究 M365 原生滚动容器和加载机制。
 - 真机视觉仍需要在更多已登录 M365 conversations 上确认 marker 与 M365 右侧滚动/菜单区域是否长期不冲突。
 
 ## 验证记录
@@ -320,7 +322,7 @@ git diff --check
 
 验证结果：
 
-- Targeted tests：5 个 test files、54 个 tests 全部通过。
+- Targeted tests：5 个 test files、56 个 tests 全部通过；新增 2 个 M365 虚拟列表回归用例，覆盖 marker 不缩水和标题不被 disjoint visible window 覆盖。
 - `typecheck` 通过。
 - M365 目标文件 eslint 通过。
 - Prettier check 通过；新增 timeline 文件先由 Prettier 写回后复测通过。
@@ -329,6 +331,7 @@ git diff --check
 - 真机 smoke test：Codex 启动带 CDP 的 Edge 测试窗口，加载最新 `L:\project\dist_chrome` 并打开真实 M365 conversation `https://m365.cloud.microsoft/chat/conversation/3a9c838f-bbfd-48aa-a85f-4e9570d20ac8`。在 `Voyager` isolated world 中确认 `window.__gvExtractCanonical()` 可用，canonical 共 4 条 messages / 2 条 user messages，timeline marker 数为 2，`#gv-m365-timeline-root`、`#gv-m365-timeline-style`、`#gv-m365-timeline-tooltip` 均为 1。
 - 真机交互检查：第一枚 marker hover/focus 后 tooltip 显示 user prompt summary；click 后 marker 被标记为 active，说明事件监听与 scroll action 路径已触发。刷新页面后 root/style/tooltip 仍各 1 个，marker 仍为 2，未重复注入。
 - 兼容检查：同一页面中 `#gv-m365-export-ui-root` 为 1、`#gv-m365-chat-width-style` 为 1、diagnostics marker 为 0，timeline CSS 不含 Gemini selector/storage key。短时间 console 捕获到 M365 原生网络 404/CORS/resource error，但未观察到 Voyager/M365 timeline 相关 exception。
+- 用户随后反馈真实 M365 向上翻历史时，由于 M365 惰性加载会自动卸载不可见对话，timeline 节点会从 4 个变成 3 个，且标题被当前 DOM 窗口里的其他 prompt 覆盖。本次已追加回归修复：按 conversation URL 缓存已见 user markers，并使用 canonical fingerprint/summary 作为稳定 key；新增测试覆盖“可见窗口减少一个 user message 时 marker 不缩水”和“完全不同可视窗口不会覆盖旧 marker 标题”。
 
 2026-04-29 M365 rich content extraction 补强后通过：
 

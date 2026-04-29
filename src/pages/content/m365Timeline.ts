@@ -1,5 +1,5 @@
 import { extractM365CanonicalConversation } from './m365ChatExtractor';
-import type { CanonicalConversation } from './m365ConversationTypes';
+import type { CanonicalConversation, CanonicalMessage } from './m365ConversationTypes';
 import { type M365TimelineIndexItem, M365TimelineService } from './m365FeatureServices';
 
 const M365_TIMELINE_ROOT_ID = 'gv-m365-timeline-root';
@@ -15,9 +15,25 @@ interface M365TimelineDeps {
   scrollToElement?: (element: Element) => void;
 }
 
+interface M365TimelineCurrentItem {
+  key: string;
+  item: M365TimelineIndexItem;
+}
+
+interface M365TimelineEntry {
+  key: string;
+  currentId: string;
+  index: number;
+  summary: string;
+  sourceElement: Element | null;
+  visible: boolean;
+}
+
 let observer: MutationObserver | null = null;
 let refreshTimer: number | null = null;
-let activeMarkerId: string | null = null;
+let activeMarkerKey: string | null = null;
+let timelineConversationKey: string | null = null;
+let timelineEntries: M365TimelineEntry[] = [];
 let timelineDeps: Required<M365TimelineDeps> = getDefaultDeps();
 
 function getDefaultDeps(): Required<M365TimelineDeps> {
@@ -83,6 +99,10 @@ function ensureM365TimelineStyle(): void {
   background: #0f6cbd;
   outline: none;
   transform: translate(-50%, -50%) scale(1.2);
+}
+
+.gv-m365-timeline-marker-stale {
+  opacity: 0.58;
 }
 
 #${M365_TIMELINE_TOOLTIP_ID} {
@@ -173,41 +193,136 @@ function getRail(root: HTMLElement): HTMLElement {
   return rail;
 }
 
-function getUserTimelineItems(): M365TimelineIndexItem[] {
+function getCurrentUserTimelineItems(): {
+  conversationKey: string;
+  items: M365TimelineCurrentItem[];
+} {
   const conversation = timelineDeps.extractConversation();
-  return timelineDeps.buildIndex(conversation).filter((item) => item.role === 'user');
+  const userMessages = conversation.messages.filter((message) => message.role === 'user');
+  const userItems = timelineDeps.buildIndex(conversation).filter((item) => item.role === 'user');
+
+  return {
+    conversationKey: getTimelineConversationKey(conversation),
+    items: userItems.map((item, index) => ({
+      key: getStableTimelineKey(userMessages[index], item),
+      item,
+    })),
+  };
+}
+
+function getTimelineConversationKey(conversation: CanonicalConversation): string {
+  try {
+    const url = new URL(conversation.url);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return conversation.url.split('?')[0] || 'm365:unknown-conversation';
+  }
+}
+
+function getStableTimelineKey(
+  message: CanonicalMessage | undefined,
+  item: M365TimelineIndexItem,
+): string {
+  const stableText = message?.fingerprint || item.summary || item.id;
+  return `${item.role}:${normalizeTimelineKey(stableText)}`;
+}
+
+function normalizeTimelineKey(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 function renderM365TimelineMarkers(): void {
   const root = ensureM365TimelineRoot();
   const rail = getRail(root);
-  const items = getUserTimelineItems();
-  const nextIds = items.map((item) => item.id).join('|');
+  const { conversationKey, items } = getCurrentUserTimelineItems();
+  const entries = mergeTimelineEntries(conversationKey, items);
+  const nextSignature = entries
+    .map((entry) => `${entry.key}:${entry.summary}:${entry.visible ? 'visible' : 'stale'}`)
+    .join('|');
 
-  if (rail.dataset.gvM365TimelineIds === nextIds) return;
+  if (rail.dataset.gvM365TimelineSignature === nextSignature) return;
 
-  rail.dataset.gvM365TimelineIds = nextIds;
+  rail.dataset.gvM365TimelineSignature = nextSignature;
   rail.replaceChildren(
-    ...items.map((item, index) => createTimelineMarker(item, index, items.length)),
+    ...entries.map((entry, index) => createTimelineMarker(entry, index, entries.length)),
   );
-  if (activeMarkerId && !items.some((item) => item.id === activeMarkerId)) {
-    activeMarkerId = null;
+  if (activeMarkerKey && !entries.some((entry) => entry.key === activeMarkerKey)) {
+    activeMarkerKey = null;
   }
   updateActiveMarker();
 }
 
+function mergeTimelineEntries(
+  conversationKey: string,
+  currentItems: M365TimelineCurrentItem[],
+): M365TimelineEntry[] {
+  if (timelineConversationKey !== conversationKey) {
+    timelineConversationKey = conversationKey;
+    timelineEntries = [];
+    activeMarkerKey = null;
+  }
+
+  const currentKeys = new Set(currentItems.map((current) => current.key));
+  const existingKeys = new Set(timelineEntries.map((entry) => entry.key));
+  const currentEntries = currentItems.map(({ key, item }) => ({
+    key,
+    currentId: item.id,
+    index: item.index,
+    summary: normalizeTimelineSummary(item.summary),
+    sourceElement: item.sourceElement,
+    visible: true,
+  }));
+
+  const existingByKey = new Map(timelineEntries.map((entry) => [entry.key, entry]));
+  const updatedCurrentEntries = currentEntries.map((entry) => ({
+    ...(existingByKey.get(entry.key) ?? entry),
+    ...entry,
+  }));
+
+  const firstOverlap = currentItems.find((current) => existingKeys.has(current.key));
+  const firstOverlapExistingIndex = firstOverlap
+    ? timelineEntries.findIndex((entry) => entry.key === firstOverlap.key)
+    : -1;
+  const insertIndex =
+    firstOverlapExistingIndex < 0
+      ? -1
+      : timelineEntries
+          .slice(0, firstOverlapExistingIndex)
+          .filter((entry) => !currentKeys.has(entry.key)).length;
+
+  let nextEntries = timelineEntries
+    .filter((entry) => !currentKeys.has(entry.key))
+    .map((entry) => ({
+      ...entry,
+      sourceElement: entry.sourceElement?.isConnected ? entry.sourceElement : null,
+      visible: false,
+    }));
+
+  if (!firstOverlap) {
+    nextEntries = [...nextEntries, ...updatedCurrentEntries];
+  } else {
+    nextEntries.splice(insertIndex, 0, ...updatedCurrentEntries);
+  }
+
+  timelineEntries = nextEntries;
+  return timelineEntries;
+}
+
 function createTimelineMarker(
-  item: M365TimelineIndexItem,
+  entry: M365TimelineEntry,
   markerIndex: number,
   markerCount: number,
 ): HTMLButtonElement {
   const marker = document.createElement('button');
   marker.type = 'button';
   marker.className = 'gv-m365-timeline-marker';
+  marker.classList.toggle('gv-m365-timeline-marker-stale', !entry.visible);
   marker.dataset.gvM365TimelineMarker = 'true';
-  marker.dataset.gvM365TimelineId = item.id;
-  marker.dataset.gvM365TimelineIndex = String(item.index);
-  marker.dataset.gvM365TimelineSummary = normalizeTimelineSummary(item.summary);
+  marker.dataset.gvM365TimelineKey = entry.key;
+  marker.dataset.gvM365TimelineId = entry.currentId;
+  marker.dataset.gvM365TimelineIndex = String(entry.index);
+  marker.dataset.gvM365TimelineSummary = entry.summary;
+  marker.dataset.gvM365TimelineVisible = entry.visible ? 'true' : 'false';
   marker.setAttribute('aria-label', marker.dataset.gvM365TimelineSummary);
   marker.setAttribute('aria-describedby', M365_TIMELINE_TOOLTIP_ID);
   marker.style.top = getMarkerTopPercent(markerIndex, markerCount);
@@ -230,10 +345,32 @@ function getMarkerTopPercent(index: number, count: number): string {
 }
 
 function findTimelineItem(marker: HTMLElement): M365TimelineIndexItem | null {
-  const id = marker.dataset.gvM365TimelineId;
-  if (!id) return null;
+  const key = marker.dataset.gvM365TimelineKey;
+  if (!key) return null;
 
-  return getUserTimelineItems().find((item) => item.id === id) ?? null;
+  const cachedEntry = timelineEntries.find((entry) => entry.key === key);
+  if (cachedEntry?.sourceElement?.isConnected) {
+    return {
+      id: cachedEntry.currentId,
+      index: cachedEntry.index,
+      role: 'user',
+      summary: cachedEntry.summary,
+      sourceElement: cachedEntry.sourceElement,
+    };
+  }
+
+  const currentItems = getCurrentUserTimelineItems();
+  const refreshedItems = mergeTimelineEntries(currentItems.conversationKey, currentItems.items);
+  const refreshedEntry = refreshedItems.find((entry) => entry.key === key);
+  if (!refreshedEntry?.sourceElement?.isConnected) return null;
+
+  return {
+    id: refreshedEntry.currentId,
+    index: refreshedEntry.index,
+    role: 'user',
+    summary: refreshedEntry.summary,
+    sourceElement: refreshedEntry.sourceElement,
+  };
 }
 
 function handleTimelineClick(event: Event): void {
@@ -245,7 +382,7 @@ function handleTimelineClick(event: Event): void {
   const item = findTimelineItem(marker);
   if (!item) return;
 
-  activeMarkerId = item.id;
+  activeMarkerKey = marker.dataset.gvM365TimelineKey || null;
   updateActiveMarker();
   timelineDeps.scrollToElement(item.sourceElement);
 }
@@ -310,7 +447,7 @@ function updateActiveMarker(): void {
   document.querySelectorAll<HTMLElement>('[data-gv-m365-timeline-marker]').forEach((marker) => {
     marker.classList.toggle(
       M365_TIMELINE_ACTIVE_CLASS,
-      Boolean(activeMarkerId && marker.dataset.gvM365TimelineId === activeMarkerId),
+      Boolean(activeMarkerKey && marker.dataset.gvM365TimelineKey === activeMarkerKey),
     );
   });
 }
@@ -384,7 +521,9 @@ export function stopM365Timeline(): void {
 
   observer?.disconnect();
   observer = null;
-  activeMarkerId = null;
+  activeMarkerKey = null;
+  timelineConversationKey = null;
+  timelineEntries = [];
   timelineDeps = getDefaultDeps();
 
   const root = document.getElementById(M365_TIMELINE_ROOT_ID);

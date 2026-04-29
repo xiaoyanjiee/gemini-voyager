@@ -109,6 +109,80 @@ describe('m365Timeline', () => {
     ]);
   });
 
+  it('keeps previously seen user markers when M365 virtualizes messages out of the DOM', () => {
+    const first = createMessage('user', 0, 'First prompt');
+    const second = createMessage('user', 1, 'Second prompt');
+    const third = createMessage('user', 2, 'Third prompt');
+    const fourth = createMessage('user', 3, 'Fourth prompt');
+    let conversation = createConversation([first, second, third, fourth]);
+
+    startM365Timeline({
+      extractConversation: () => conversation,
+      scrollToElement: vi.fn(),
+    });
+
+    first.sourceElement.remove();
+    conversation = createConversation([second, third, fourth]);
+    startM365Timeline({
+      extractConversation: () => conversation,
+      scrollToElement: vi.fn(),
+    });
+
+    const markers = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('[data-gv-m365-timeline-marker]'),
+    );
+
+    expect(markers).toHaveLength(4);
+    expect(markers.map((marker) => marker.getAttribute('aria-label'))).toEqual([
+      'First prompt',
+      'Second prompt',
+      'Third prompt',
+      'Fourth prompt',
+    ]);
+    expect(markers[0].dataset.gvM365TimelineVisible).toBe('false');
+    expect(markers[0].classList.contains('gv-m365-timeline-marker-stale')).toBe(true);
+  });
+
+  it('does not replace cached marker titles with a disjoint virtualized window', () => {
+    let conversation = createConversation([
+      createMessage('user', 0, 'First prompt'),
+      createMessage('user', 1, 'Second prompt'),
+      createMessage('user', 2, 'Third prompt'),
+      createMessage('user', 3, 'Fourth prompt'),
+    ]);
+
+    startM365Timeline({
+      extractConversation: () => conversation,
+      scrollToElement: vi.fn(),
+    });
+
+    document.querySelectorAll('article').forEach((element) => element.remove());
+    conversation = createConversation([
+      createMessage('user', 0, 'Fifth prompt'),
+      createMessage('user', 1, 'Sixth prompt'),
+      createMessage('user', 2, 'Seventh prompt'),
+    ]);
+    startM365Timeline({
+      extractConversation: () => conversation,
+      scrollToElement: vi.fn(),
+    });
+
+    const markers = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('[data-gv-m365-timeline-marker]'),
+    );
+
+    expect(markers).toHaveLength(7);
+    expect(markers.map((marker) => marker.getAttribute('aria-label'))).toEqual([
+      'First prompt',
+      'Second prompt',
+      'Third prompt',
+      'Fourth prompt',
+      'Fifth prompt',
+      'Sixth prompt',
+      'Seventh prompt',
+    ]);
+  });
+
   it('scrolls to the canonical user source element when a marker is clicked', () => {
     const first = createMessage('user', 0, 'First prompt');
     const second = createMessage('user', 1, 'Second prompt');
