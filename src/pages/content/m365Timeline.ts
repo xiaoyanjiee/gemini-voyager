@@ -1,6 +1,13 @@
 import { extractM365CanonicalConversation } from './m365ChatExtractor';
 import type { CanonicalConversation, CanonicalMessage } from './m365ConversationTypes';
 import { type M365TimelineIndexItem, M365TimelineService } from './m365FeatureServices';
+import {
+  type M365TimelineScrollMode,
+  M365_TIMELINE_DEFAULT_SCROLL_MODE,
+  M365_TIMELINE_ENABLED_KEY,
+  M365_TIMELINE_SCROLL_MODE_KEY,
+  normalizeM365TimelineScrollMode,
+} from './m365Settings';
 
 const M365_TIMELINE_ROOT_ID = 'gv-m365-timeline-root';
 const M365_TIMELINE_STYLE_ID = 'gv-m365-timeline-style';
@@ -35,13 +42,21 @@ let activeMarkerKey: string | null = null;
 let timelineConversationKey: string | null = null;
 let timelineEntries: M365TimelineEntry[] = [];
 let timelineDeps: Required<M365TimelineDeps> = getDefaultDeps();
+let timelineEnabled = true;
+let timelineScrollMode: M365TimelineScrollMode = M365_TIMELINE_DEFAULT_SCROLL_MODE;
+let storageListener:
+  | ((changes: Record<string, chrome.storage.StorageChange>, area: string) => void)
+  | null = null;
 
 function getDefaultDeps(): Required<M365TimelineDeps> {
   return {
     extractConversation: extractM365CanonicalConversation,
     buildIndex: M365TimelineService.buildIndex.bind(M365TimelineService),
     scrollToElement: (element: Element) => {
-      element.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      element.scrollIntoView({
+        block: 'start',
+        behavior: timelineScrollMode === 'jump' ? 'auto' : 'smooth',
+      });
     },
   };
 }
@@ -232,6 +247,11 @@ function normalizeTimelineKey(value: string): string {
 }
 
 function renderM365TimelineMarkers(): void {
+  if (!timelineEnabled) {
+    removeM365TimelineUi();
+    return;
+  }
+
   const root = ensureM365TimelineRoot();
   const rail = getRail(root);
   const { conversationKey, items } = getCurrentUserTimelineItems();
@@ -488,6 +508,7 @@ function scheduleTimelineRefresh(): void {
 }
 
 function ensureTimelineObserver(): void {
+  if (!timelineEnabled) return;
   if (observer) return;
 
   observer = new MutationObserver((mutations) => {
@@ -513,7 +534,7 @@ function ensureTimelineObserver(): void {
   });
 }
 
-export function stopM365Timeline(): void {
+function removeM365TimelineUi(): void {
   if (refreshTimer !== null) {
     window.clearTimeout(refreshTimer);
     refreshTimer = null;
@@ -521,10 +542,6 @@ export function stopM365Timeline(): void {
 
   observer?.disconnect();
   observer = null;
-  activeMarkerKey = null;
-  timelineConversationKey = null;
-  timelineEntries = [];
-  timelineDeps = getDefaultDeps();
 
   const root = document.getElementById(M365_TIMELINE_ROOT_ID);
   if (root) {
@@ -536,8 +553,12 @@ export function stopM365Timeline(): void {
   document.getElementById(M365_TIMELINE_STYLE_ID)?.remove();
 }
 
-export function startM365Timeline(deps: M365TimelineDeps = {}): void {
-  timelineDeps = { ...getDefaultDeps(), ...deps };
+function applyM365Timeline(): void {
+  if (!timelineEnabled) {
+    removeM365TimelineUi();
+    return;
+  }
+
   ensureM365TimelineStyle();
   const root = ensureM365TimelineRoot();
   ensureM365TimelineTooltip();
@@ -545,7 +566,68 @@ export function startM365Timeline(deps: M365TimelineDeps = {}): void {
   try {
     renderM365TimelineMarkers();
   } catch (error) {
-    console.warn('[Gemini Voyager] M365 timeline initial render failed:', error);
+    console.warn('[Gemini Voyager] M365 timeline render failed:', error);
   }
   ensureTimelineObserver();
+}
+
+function readStoredM365TimelineSettings(): void {
+  try {
+    chrome.storage?.sync?.get(
+      {
+        [M365_TIMELINE_ENABLED_KEY]: true,
+        [M365_TIMELINE_SCROLL_MODE_KEY]: M365_TIMELINE_DEFAULT_SCROLL_MODE,
+      },
+      (res) => {
+        timelineEnabled = res?.[M365_TIMELINE_ENABLED_KEY] !== false;
+        timelineScrollMode = normalizeM365TimelineScrollMode(res?.[M365_TIMELINE_SCROLL_MODE_KEY]);
+        applyM365Timeline();
+      },
+    );
+  } catch {}
+}
+
+function ensureStorageListener(): void {
+  if (storageListener) return;
+
+  storageListener = (changes, area) => {
+    if (area !== 'sync') return;
+
+    if (changes[M365_TIMELINE_ENABLED_KEY]) {
+      timelineEnabled = changes[M365_TIMELINE_ENABLED_KEY].newValue !== false;
+    }
+
+    if (changes[M365_TIMELINE_SCROLL_MODE_KEY]) {
+      timelineScrollMode = normalizeM365TimelineScrollMode(
+        changes[M365_TIMELINE_SCROLL_MODE_KEY].newValue,
+      );
+    }
+
+    if (changes[M365_TIMELINE_ENABLED_KEY] || changes[M365_TIMELINE_SCROLL_MODE_KEY]) {
+      applyM365Timeline();
+    }
+  };
+
+  chrome.storage?.onChanged?.addListener(storageListener);
+}
+
+export function stopM365Timeline(): void {
+  removeM365TimelineUi();
+  activeMarkerKey = null;
+  timelineConversationKey = null;
+  timelineEntries = [];
+  timelineDeps = getDefaultDeps();
+  timelineEnabled = true;
+  timelineScrollMode = M365_TIMELINE_DEFAULT_SCROLL_MODE;
+  if (storageListener) {
+    chrome.storage?.onChanged?.removeListener(storageListener);
+    storageListener = null;
+  }
+}
+
+export function startM365Timeline(deps: M365TimelineDeps = {}): void {
+  timelineDeps = { ...getDefaultDeps(), ...deps };
+  applyM365Timeline();
+  readStoredM365TimelineSettings();
+  ensureStorageListener();
 }

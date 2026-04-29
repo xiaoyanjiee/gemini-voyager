@@ -307,7 +307,54 @@ Plan 内容：
 - 已见但当前 DOM 不可见的 marker 会保留为 stale marker；如果对应 `sourceElement` 尚未被 M365 重新挂载，点击时无法立即滚动到该旧消息。后续如要支持“点击旧 marker 触发 M365 加载历史”，需要额外研究 M365 原生滚动容器和加载机制。
 - 真机视觉仍需要在更多已登录 M365 conversations 上确认 marker 与 M365 右侧滚动/菜单区域是否长期不冲突。
 
+### 11. M365 settings UI MVP
+
+目标是参考原 Gemini popup 的交互形态，为 M365 chatWidth 和 timeline 增加轻量设置入口，同时保持 M365-only 隔离，不迁移 Gemini selector、Gemini storage、star/pin、preview panel、PDF/Image export 或完整 timeline manager。
+
+Plan 内容：
+
+- 在 popup 中识别当前 active tab 是否为 `m365.cloud.microsoft`；M365 tab 下显示 M365 专用设置区，Gemini / AI Studio tab 保持原设置页。
+- 新增 M365-only storage key：`gvM365ChatWidthEnabled`、`gvM365ChatWidthPercent`、`gvM365TimelineEnabled`、`gvM365TimelineScrollMode`，并预留 `gvM365TimelinePosition` 供 reset position 使用。
+- `m365ChatWidth.ts` 改为默认开启，读取并监听 M365 storage；支持开关和宽度滑杆实时生效。
+- `m365Timeline.ts` 改为默认开启，读取并监听 M365 storage；支持关闭 timeline，并支持 `flow` / `jump` 两种 scroll mode。
+- popup UI 复用现有 `Card`、`Switch`、segmented control 和 `WidthSlider` 风格，不引入新视觉体系。
+
+已完成：
+
+- 新增 `src/pages/content/m365Settings.ts`，集中定义 M365 storage key、默认值、宽度 clamp 和 timeline mode normalization。
+- `src/pages/content/m365ChatWidth.ts` 现在使用 `gvM365ChatWidthEnabled` / `gvM365ChatWidthPercent`；默认值为开启、`75vw`，并通过 `chrome.storage.onChanged` 实时更新或清理 style/marker。
+- `src/pages/content/m365Timeline.ts` 现在使用 `gvM365TimelineEnabled` / `gvM365TimelineScrollMode`；关闭时会移除 timeline root/style/tooltip 并断开 observer，重新开启时幂等恢复；`flow` 使用 smooth scroll，`jump` 使用 auto scroll。
+- `src/pages/popup/Popup.tsx` 在 M365 tab 下显示轻量 `M365 Copilot Settings`，包含 timeline 开关、flow/jump、reset position 和 chatWidth 开关/滑杆；Gemini / AI Studio tab 保持原设置视图。
+- 新增 `src/pages/popup/__tests__/m365Settings.test.tsx`，并扩展 `m365ChatWidth.test.ts` / `m365Timeline.test.ts`，覆盖 M365 key 写入、默认开启、storage 关闭、宽度 clamp、scroll mode 和不写 Gemini key。
+
+当前限制：
+
+- M365 settings MVP 只覆盖 chatWidth 和 timeline；不迁移 Gemini star/pin、preview panel、keyboard shortcuts、拖拽定位或完整 timeline settings。
+- `gvM365TimelinePosition` 目前只是 reset position 预留 key；本轮没有实现 M365 timeline 拖拽位置。
+- 真机 popup 视觉和 storage 实时生效仍需在用户已登录 M365 环境中最终人工确认；本轮已完成自动化验证和 build。
+
 ## 验证记录
+
+2026-04-30 M365 settings UI MVP 接入后通过：
+
+```powershell
+npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts src/pages/content/m365ExportUi.test.ts src/pages/content/m365ChatWidth.test.ts src/pages/content/m365Timeline.test.ts src/pages/popup/__tests__/m365Settings.test.tsx
+npm.cmd run typecheck
+npm.cmd exec -- eslint src/pages/content/m365*.ts src/pages/content/m365*.test.ts src/pages/popup/Popup.tsx src/pages/popup/__tests__/m365Settings.test.tsx
+npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts src/pages/popup/Popup.tsx src/pages/popup/__tests__/m365Settings.test.tsx M365_COPILOT_CONTEXT.md M365_CHANGELOG.md
+npm.cmd run build:chrome
+git diff --check
+```
+
+验证结果：
+
+- Targeted tests：6 个 test files、65 个 tests 全部通过。
+- `typecheck` 通过。
+- M365 content files、popup 和新增 popup test 的 eslint 通过。
+- Prettier check 通过。
+- `build:chrome` 通过；Vite 仅输出既有 dynamic import、重复 icon asset 和大 chunk warnings。
+- `git diff --check` 通过。
+- 本轮尚未完成真实 M365 popup 手动验收；后续需要 reload `L:\project\dist_chrome` 后，在真实 M365 tab 打开 popup，确认 M365 设置视图、chatWidth 开关/滑杆、timeline 开关与 flow/jump 实时生效。
 
 2026-04-29 M365 timeline MVP 接入后通过：
 

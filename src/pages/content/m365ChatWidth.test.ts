@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { startM365ChatWidth, stopM365ChatWidth } from './m365ChatWidth';
 
 const STYLE_ID = 'gv-m365-chat-width-style';
 const ENABLED_CLASS = 'gv-m365-chat-width-enabled';
+const ENABLED_KEY = 'gvM365ChatWidthEnabled';
+const WIDTH_KEY = 'gvM365ChatWidthPercent';
 
 function getStyleText(): string {
   const style = document.getElementById(STYLE_ID);
@@ -16,11 +18,25 @@ function getSourceText(): string {
   return readFileSync('src/pages/content/m365ChatWidth.ts', 'utf8');
 }
 
+function getSyncGetMock(): ReturnType<typeof vi.fn> {
+  return chrome.storage.sync.get as unknown as ReturnType<typeof vi.fn>;
+}
+
 describe('M365 chat width', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getSyncGetMock().mockImplementation(
+      (defaults: Record<string, unknown>, callback?: (res: Record<string, unknown>) => void) => {
+        callback?.(defaults);
+      },
+    );
+  });
+
   afterEach(() => {
     stopM365ChatWidth();
     document.head.innerHTML = '';
     document.body.innerHTML = '';
+    vi.restoreAllMocks();
   });
 
   it('injects one M365-only style and marker', () => {
@@ -29,6 +45,7 @@ describe('M365 chat width', () => {
     expect(document.querySelectorAll(`#${STYLE_ID}`)).toHaveLength(1);
     expect(document.documentElement.classList.contains(ENABLED_CLASS)).toBe(true);
     expect(getStyleText()).toContain(`html.${ENABLED_CLASS}`);
+    expect(getStyleText()).toContain('75vw');
   });
 
   it('keeps repeated startup idempotent', () => {
@@ -38,6 +55,62 @@ describe('M365 chat width', () => {
 
     expect(document.querySelectorAll(`#${STYLE_ID}`)).toHaveLength(1);
     expect(document.documentElement.classList.contains(ENABLED_CLASS)).toBe(true);
+    expect(chrome.storage.onChanged.addListener).toHaveBeenCalledTimes(1);
+  });
+
+  it('respects stored disabled state', () => {
+    getSyncGetMock().mockImplementation(
+      (_defaults: Record<string, unknown>, callback?: (res: Record<string, unknown>) => void) => {
+        callback?.({ [ENABLED_KEY]: false, [WIDTH_KEY]: 75 });
+      },
+    );
+
+    startM365ChatWidth();
+
+    expect(document.querySelector(`#${STYLE_ID}`)).toBeNull();
+    expect(document.documentElement.classList.contains(ENABLED_CLASS)).toBe(false);
+  });
+
+  it('applies and clamps stored width percent', () => {
+    getSyncGetMock().mockImplementation(
+      (_defaults: Record<string, unknown>, callback?: (res: Record<string, unknown>) => void) => {
+        callback?.({ [ENABLED_KEY]: true, [WIDTH_KEY]: 200 });
+      },
+    );
+
+    startM365ChatWidth();
+
+    expect(getStyleText()).toContain('100vw');
+  });
+
+  it('updates live from M365 storage changes', () => {
+    startM365ChatWidth();
+    const listener = vi.mocked(chrome.storage.onChanged.addListener).mock.calls[0]?.[0];
+    expect(listener).toBeTypeOf('function');
+
+    listener(
+      {
+        [WIDTH_KEY]: {
+          oldValue: 75,
+          newValue: 60,
+        },
+      },
+      'sync',
+    );
+    expect(getStyleText()).toContain('60vw');
+
+    listener(
+      {
+        [ENABLED_KEY]: {
+          oldValue: true,
+          newValue: false,
+        },
+      },
+      'sync',
+    );
+
+    expect(document.querySelector(`#${STYLE_ID}`)).toBeNull();
+    expect(document.documentElement.classList.contains(ENABLED_CLASS)).toBe(false);
   });
 
   it('uses M365-only selectors and avoids Gemini chat width selectors', () => {
@@ -54,6 +127,7 @@ describe('M365 chat width', () => {
     expect(styleText).not.toContain('response-container');
     expect(styleText).not.toContain('.conversation-container');
     expect(styleText).not.toContain('geminiChatWidth');
+    expect(styleText).not.toContain('gvChatWidthEnabled');
   });
 
   it('does not modify the M365 export UI root', () => {
@@ -78,6 +152,8 @@ describe('M365 chat width', () => {
     expect(sourceText).not.toContain('sourceElement');
     expect(sourceText).not.toContain('contentElement');
     expect(sourceText).not.toContain('innerText');
+    expect(sourceText).not.toContain('geminiChatWidth');
+    expect(sourceText).not.toContain('gvChatWidthEnabled');
   });
 
   it('cleans up style and marker', () => {

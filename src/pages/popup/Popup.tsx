@@ -27,6 +27,18 @@ import { Label } from '../../components/ui/label';
 import { Switch } from '../../components/ui/switch';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useWidthAdjuster } from '../../hooks/useWidthAdjuster';
+import {
+  type M365TimelineScrollMode,
+  M365_CHAT_WIDTH_ENABLED_KEY,
+  M365_CHAT_WIDTH_PERCENT,
+  M365_CHAT_WIDTH_PERCENT_KEY,
+  M365_TIMELINE_DEFAULT_SCROLL_MODE,
+  M365_TIMELINE_ENABLED_KEY,
+  M365_TIMELINE_POSITION_KEY,
+  M365_TIMELINE_SCROLL_MODE_KEY,
+  clampM365ChatWidthPercent,
+  normalizeM365TimelineScrollMode,
+} from '../content/m365Settings';
 import { CloudSyncSettings } from './components/CloudSyncSettings';
 import { ContextSyncSettings } from './components/ContextSyncSettings';
 import { KeyboardShortcutSettings } from './components/KeyboardShortcutSettings';
@@ -44,6 +56,7 @@ import {
 import WidthSlider from './components/WidthSlider';
 
 type ScrollMode = 'jump' | 'flow';
+type ActivePageKind = AccountPlatform | 'm365' | 'unknown';
 
 /**
  * Reorderable popup section IDs — order here is the default display order.
@@ -304,6 +317,14 @@ const toReleaseTag = (version?: string | null): string | null => {
   return trimmed.startsWith('v') ? trimmed : `v${trimmed}`;
 };
 
+function isM365CopilotUrl(url: string): boolean {
+  try {
+    return new URL(url).hostname.toLowerCase() === 'm365.cloud.microsoft';
+  } catch {
+    return false;
+  }
+}
+
 interface SettingsUpdate {
   mode?: ScrollMode | null;
   hideContainer?: boolean;
@@ -436,6 +457,11 @@ export default function Popup() {
   const [chatWidthEnabled, setChatWidthEnabled] = useState<boolean>(false);
   const [editInputWidthEnabled, setEditInputWidthEnabled] = useState<boolean>(false);
   const [sidebarWidthEnabled, setSidebarWidthEnabled] = useState<boolean>(false);
+  const [m365ChatWidthEnabled, setM365ChatWidthEnabled] = useState<boolean>(true);
+  const [m365TimelineEnabled, setM365TimelineEnabled] = useState<boolean>(true);
+  const [m365TimelineMode, setM365TimelineMode] = useState<M365TimelineScrollMode>(
+    M365_TIMELINE_DEFAULT_SCROLL_MODE,
+  );
   const [accountIsolationEnabledGemini, setAccountIsolationEnabledGemini] =
     useState<boolean>(false);
   const [accountIsolationEnabledAIStudio, setAccountIsolationEnabledAIStudio] =
@@ -446,8 +472,10 @@ export default function Popup() {
     'idle' | 'loading' | 'copied' | 'error'
   >('idle');
   const [sectionOrder, setSectionOrder] = useState<PopupSectionId[]>([...DEFAULT_SECTION_ORDER]);
+  const [activePageKind, setActivePageKind] = useState<ActivePageKind>('unknown');
 
-  const isAIStudio = activeAccountPlatform === 'aistudio';
+  const isAIStudio = activePageKind === 'aistudio';
+  const isM365 = activePageKind === 'm365';
   const currentIsolationPlatformLabel = isAIStudio ? t('platformAIStudio') : t('platformGemini');
 
   useEffect(() => {
@@ -455,9 +483,18 @@ export default function Popup() {
       .query({ active: true, currentWindow: true })
       .then((tabs) => {
         const url = tabs[0]?.url || '';
-        setActiveAccountPlatform(detectAccountPlatformFromUrl(url));
+        if (isM365CopilotUrl(url)) {
+          setActivePageKind('m365');
+          return;
+        }
+
+        const platform = detectAccountPlatformFromUrl(url);
+        setActiveAccountPlatform(platform);
+        setActivePageKind(platform);
       })
-      .catch(() => {});
+      .catch(() => {
+        setActivePageKind('gemini');
+      });
   }, []);
 
   const handleFormulaCopyFormatChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -604,6 +641,18 @@ export default function Popup() {
       );
       try {
         chrome.storage?.sync?.set({ geminiChatWidth: normalized });
+      } catch {}
+    }, []),
+  });
+
+  const m365ChatWidthAdjuster = useWidthAdjuster({
+    storageKey: M365_CHAT_WIDTH_PERCENT_KEY,
+    defaultValue: M365_CHAT_WIDTH_PERCENT.defaultValue,
+    normalize: clampM365ChatWidthPercent,
+    onApply: useCallback((widthPercent: number) => {
+      const normalized = clampM365ChatWidthPercent(widthPercent);
+      try {
+        chrome.storage?.sync?.set({ [M365_CHAT_WIDTH_PERCENT_KEY]: normalized });
       } catch {}
     }, []),
   });
@@ -851,6 +900,10 @@ export default function Popup() {
           gvChatWidthEnabled: false,
           gvEditInputWidthEnabled: false,
           gvSidebarWidthEnabled: false,
+          [M365_CHAT_WIDTH_ENABLED_KEY]: true,
+          [M365_CHAT_WIDTH_PERCENT_KEY]: M365_CHAT_WIDTH_PERCENT.defaultValue,
+          [M365_TIMELINE_ENABLED_KEY]: true,
+          [M365_TIMELINE_SCROLL_MODE_KEY]: M365_TIMELINE_DEFAULT_SCROLL_MODE,
           geminiChatWidth: CHAT_PERCENT.defaultValue,
           geminiEditInputWidth: EDIT_PERCENT.defaultValue,
           [StorageKeys.GV_SHOW_MESSAGE_TIMESTAMPS]: false,
@@ -921,6 +974,11 @@ export default function Popup() {
                 res.geminiEditInputWidth !== EDIT_PERCENT.defaultValue),
           );
           setSidebarWidthEnabled(res?.gvSidebarWidthEnabled === true);
+          setM365ChatWidthEnabled(res?.[M365_CHAT_WIDTH_ENABLED_KEY] !== false);
+          setM365TimelineEnabled(res?.[M365_TIMELINE_ENABLED_KEY] !== false);
+          setM365TimelineMode(
+            normalizeM365TimelineScrollMode(res?.[M365_TIMELINE_SCROLL_MODE_KEY]),
+          );
 
           const legacyIsolationEnabled = res?.[StorageKeys.GV_ACCOUNT_ISOLATION_ENABLED] === true;
           const geminiIsolationRaw = res?.[StorageKeys.GV_ACCOUNT_ISOLATION_ENABLED_GEMINI];
@@ -1238,6 +1296,134 @@ export default function Popup() {
   // Show starred history if requested
   if (showStarredHistory) {
     return <StarredHistory onClose={() => setShowStarredHistory(false)} />;
+  }
+
+  if (activePageKind === 'unknown') {
+    return (
+      <div className="bg-background text-foreground w-[360px]">
+        <div className="border-border/50 flex items-center justify-between border-b px-5 py-5">
+          <h1 className="text-primary text-2xl font-extrabold tracking-tight">{t('extName')}</h1>
+          <div className="flex items-center gap-1">
+            <DarkModeToggle />
+            <LanguageSwitcher />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isM365) {
+    const m365TimelineEnabledLabel = language === 'zh' ? '启用时间轴' : 'Enable timeline';
+    const m365SettingsTitle = language === 'zh' ? 'M365 Copilot 设置' : 'M365 Copilot Settings';
+
+    return (
+      <div className="bg-background text-foreground w-[360px]">
+        <div className="border-border/50 flex items-center justify-between border-b px-5 py-5">
+          <h1 className="text-primary text-2xl font-extrabold tracking-tight">{t('extName')}</h1>
+          <div className="flex items-center gap-1">
+            <DarkModeToggle />
+            <LanguageSwitcher />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4 p-5">
+          <Card className="p-4 transition-all hover:shadow-md">
+            <CardTitle className="mb-4">{m365SettingsTitle}</CardTitle>
+            <CardContent className="space-y-4 p-0">
+              <div className="group flex items-center justify-between">
+                <Label
+                  htmlFor="m365-timeline-enabled"
+                  className="group-hover:text-primary cursor-pointer text-sm font-medium transition-colors"
+                >
+                  {m365TimelineEnabledLabel}
+                </Label>
+                <Switch
+                  id="m365-timeline-enabled"
+                  checked={m365TimelineEnabled}
+                  onChange={(e) => {
+                    setM365TimelineEnabled(e.target.checked);
+                    void setSyncStorage({ [M365_TIMELINE_ENABLED_KEY]: e.target.checked });
+                  }}
+                />
+              </div>
+
+              <div
+                className="overflow-hidden transition-all duration-200 ease-in-out"
+                style={{
+                  maxHeight: m365TimelineEnabled ? '160px' : '0px',
+                  opacity: m365TimelineEnabled ? 1 : 0,
+                }}
+              >
+                <Label className="mb-2 block text-sm font-medium">{t('scrollMode')}</Label>
+                <div className="bg-secondary/60 relative grid grid-cols-2 gap-1 rounded-xl p-1">
+                  <div
+                    className="bg-primary pointer-events-none absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg shadow-sm transition-all duration-300 ease-out"
+                    style={{ left: m365TimelineMode === 'flow' ? '4px' : 'calc(50% + 2px)' }}
+                  />
+                  <button
+                    type="button"
+                    className={`relative z-10 rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 ${
+                      m365TimelineMode === 'flow'
+                        ? 'text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    onClick={() => {
+                      setM365TimelineMode('flow');
+                      void setSyncStorage({ [M365_TIMELINE_SCROLL_MODE_KEY]: 'flow' });
+                    }}
+                  >
+                    {t('flow')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`relative z-10 rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 ${
+                      m365TimelineMode === 'jump'
+                        ? 'text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    onClick={() => {
+                      setM365TimelineMode('jump');
+                      void setSyncStorage({ [M365_TIMELINE_SCROLL_MODE_KEY]: 'jump' });
+                    }}
+                  >
+                    {t('jump')}
+                  </button>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="group hover:border-primary/50 mt-3 w-full"
+                  onClick={() => {
+                    void setSyncStorage({ [M365_TIMELINE_POSITION_KEY]: null });
+                  }}
+                >
+                  <span className="text-xs transition-transform group-hover:scale-105">
+                    {t('resetTimelinePosition')}
+                  </span>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <WidthSlider
+            label={t('chatWidth')}
+            value={m365ChatWidthAdjuster.width}
+            min={M365_CHAT_WIDTH_PERCENT.min}
+            max={M365_CHAT_WIDTH_PERCENT.max}
+            step={1}
+            narrowLabel={t('chatWidthNarrow')}
+            wideLabel={t('chatWidthWide')}
+            onChange={m365ChatWidthAdjuster.handleChange}
+            onChangeComplete={m365ChatWidthAdjuster.handleChangeComplete}
+            enabled={m365ChatWidthEnabled}
+            onToggle={(enabled) => {
+              setM365ChatWidthEnabled(enabled);
+              void setSyncStorage({ [M365_CHAT_WIDTH_ENABLED_KEY]: enabled });
+            }}
+          />
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -1,8 +1,11 @@
 import { readFileSync } from 'node:fs';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CanonicalConversation, CanonicalMessage } from './m365ConversationTypes';
 import { startM365Timeline, stopM365Timeline } from './m365Timeline';
+
+const TIMELINE_ENABLED_KEY = 'gvM365TimelineEnabled';
+const TIMELINE_SCROLL_MODE_KEY = 'gvM365TimelineScrollMode';
 
 function createMessage(
   role: CanonicalMessage['role'],
@@ -59,7 +62,20 @@ function startWithConversation(
   return scrollToElement;
 }
 
+function getSyncGetMock(): ReturnType<typeof vi.fn> {
+  return chrome.storage.sync.get as unknown as ReturnType<typeof vi.fn>;
+}
+
 describe('m365Timeline', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getSyncGetMock().mockImplementation(
+      (defaults: Record<string, unknown>, callback?: (res: Record<string, unknown>) => void) => {
+        callback?.(defaults);
+      },
+    );
+  });
+
   afterEach(() => {
     stopM365Timeline();
     document.body.innerHTML = '';
@@ -88,6 +104,21 @@ describe('m365Timeline', () => {
     expect(document.querySelectorAll('#gv-m365-timeline-root')).toHaveLength(1);
     expect(document.querySelectorAll('#gv-m365-timeline-style')).toHaveLength(1);
     expect(document.querySelectorAll('[data-gv-m365-timeline-marker]')).toHaveLength(1);
+    expect(chrome.storage.onChanged.addListener).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not render when stored M365 timeline setting is disabled', () => {
+    getSyncGetMock().mockImplementation(
+      (_defaults: Record<string, unknown>, callback?: (res: Record<string, unknown>) => void) => {
+        callback?.({ [TIMELINE_ENABLED_KEY]: false, [TIMELINE_SCROLL_MODE_KEY]: 'flow' });
+      },
+    );
+
+    startWithConversation(createConversation([createMessage('user', 0, 'First prompt')]));
+
+    expect(document.querySelector('#gv-m365-timeline-root')).toBeNull();
+    expect(document.querySelector('#gv-m365-timeline-style')).toBeNull();
+    expect(document.querySelectorAll('[data-gv-m365-timeline-marker]')).toHaveLength(0);
   });
 
   it('renders markers only for user messages', () => {
@@ -197,6 +228,55 @@ describe('m365Timeline', () => {
     expect(scrollToElement).toHaveBeenCalledTimes(1);
     expect(scrollToElement).toHaveBeenCalledWith(second.sourceElement);
     expect(secondMarker.classList.contains('gv-m365-timeline-marker-active')).toBe(true);
+  });
+
+  it('uses M365 timeline scroll mode for default marker scrolling', () => {
+    const first = createMessage('user', 0, 'First prompt');
+    const scrollIntoView = vi.fn();
+    first.sourceElement.scrollIntoView = scrollIntoView;
+    const conversation = createConversation([first]);
+
+    startM365Timeline({
+      extractConversation: () => conversation,
+    });
+
+    document.querySelector<HTMLButtonElement>('[data-gv-m365-timeline-marker]')?.click();
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'start', behavior: 'smooth' });
+
+    const listener = vi.mocked(chrome.storage.onChanged.addListener).mock.calls[0]?.[0];
+    expect(listener).toBeTypeOf('function');
+    listener(
+      {
+        [TIMELINE_SCROLL_MODE_KEY]: {
+          oldValue: 'flow',
+          newValue: 'jump',
+        },
+      },
+      'sync',
+    );
+
+    document.querySelector<HTMLButtonElement>('[data-gv-m365-timeline-marker]')?.click();
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'start', behavior: 'auto' });
+  });
+
+  it('cleans up when M365 timeline is disabled from storage changes', () => {
+    startWithConversation(createConversation([createMessage('user', 0, 'First prompt')]));
+    const listener = vi.mocked(chrome.storage.onChanged.addListener).mock.calls[0]?.[0];
+    expect(listener).toBeTypeOf('function');
+
+    listener(
+      {
+        [TIMELINE_ENABLED_KEY]: {
+          oldValue: true,
+          newValue: false,
+        },
+      },
+      'sync',
+    );
+
+    expect(document.querySelector('#gv-m365-timeline-root')).toBeNull();
+    expect(document.querySelector('#gv-m365-timeline-style')).toBeNull();
+    expect(document.querySelector('#gv-m365-timeline-tooltip')).toBeNull();
   });
 
   it('shows tooltip text from the timeline summary without DOM object leakage', () => {
