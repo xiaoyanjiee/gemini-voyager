@@ -7,6 +7,34 @@
 这是后续 Codex 会话的交接文档。修改 M365 专用代码前，必须先阅读本文件。
 桌面上的历史 `PLAN.md` / `PLAN2.md` 以及 M365 export adapter 计划已吸收到本文档；新会话不需要再导入这三份 plan。
 
+## 2026-04-30 交接快照
+
+项目位置与分支：
+
+- 当前项目在 `L:\project`，分支是 `m365-probe`。
+- 后续会话开始前必须先读：`M365_COPILOT_CONTEXT.md`、`M365_CHANGELOG.md`、`AGENTS.md`、`CLAUDE.md`。
+- 当前有一个无关 staged 文件 `.agents/skills/safari-release/SKILL.md`，不能误提交。
+- 当前本地最新提交是 `e90f577 fix(m365): keep timeline off native scrollbar`。
+- 当前本地 `m365-probe` 领先 `origin/m365-probe` 1 个提交；远端目前停在 `2fb4617 fix(m365): avoid timeline tooltip export overlap`。
+- 如果需要同步 GitHub，只 push `m365-probe`，不要碰 `main`，提交和 push 前继续避开 `.agents/skills/safari-release/SKILL.md`。
+
+已经完成的 M365 主线：
+
+1. M365 canonical conversation baseline。
+2. M365 export adapter baseline。
+3. M365 JSON Export MVP。
+4. M365 Markdown Export MVP。
+5. M365 Minimal Export UI。
+6. M365 JSON / Markdown 真实浏览器验收。
+7. M365 chatWidth MVP。
+8. M365 rich content sample validation。
+9. M365 timeline MVP。
+10. M365 settings UI MVP。
+11. M365 Export UI 与 Timeline 视觉优化。
+12. M365 timeline 右侧滚动条避让修复。
+
+当前边界仍然不变：M365-only，不改 Gemini，不复用 Gemini selector/storage/timeline manager，不新增 M365 DOM 正文扫描入口；export、timeline、layout 都以 `CanonicalConversation` 或现有 M365 模块边界为准。
+
 ## 当前已完成功能
 
 - 扩展已通过 `manifest.json` 注入 `m365.cloud.microsoft`。

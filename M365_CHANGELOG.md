@@ -29,8 +29,21 @@
 
 当前分支：`m365-probe`
 
+当前交接状态：
+
+- 项目路径是 `L:\project`；后续 Codex 开始前必须先读 `M365_COPILOT_CONTEXT.md`、`M365_CHANGELOG.md`、`AGENTS.md`、`CLAUDE.md`。
+- 当前本地最新提交是 `e90f577 fix(m365): keep timeline off native scrollbar`。
+- 当前本地 `m365-probe` 领先 `origin/m365-probe` 1 个提交；远端目前停在 `2fb4617 fix(m365): avoid timeline tooltip export overlap`。
+- 当前有一个无关 staged 文件 `.agents/skills/safari-release/SKILL.md`，不能误提交；提交 M365 变更时必须继续使用显式 pathspec。
+- 如果后续需要同步 GitHub，只 push `m365-probe`，不要碰 `main`。
+
 最近关键提交：
 
+- `e90f577 fix(m365): keep timeline off native scrollbar`
+- `2fb4617 fix(m365): avoid timeline tooltip export overlap`
+- `9edac4c feat(m365): refine export and timeline ui`
+- `8aed801 docs(m365): record settings browser validation`
+- `7c459b8 feat(m365): add settings controls`
 - `99c3af2 feat(m365): add minimal export ui`
 - `09580fc fix(m365): gate diagnostics and tighten image URLs`
 - `90c892c docs(m365): absorb migration plans into context`
@@ -362,7 +375,41 @@ Plan 内容：
 - 本轮 timeline 只做视觉优化，不做 preview panel、search、star/pin、marker level、拖拽定位、滚动同步或完整 Gemini timeline 生态。
 - 程序化验证已通过；真实 M365 页面 reload 后仍需要用户或后续 Codex 做最终视觉确认，重点看 Export 弹窗、timeline 位置和原生右侧轨道是否舒适。
 
+### 13. M365 timeline 右侧滚动条避让修复
+
+目标是修复用户指出的真实 M365 原生右侧滚动条遮挡问题：timeline 不能只靠 `pointer-events: none` 让滚动事件穿透，还必须在视觉上向左避开滚动条。
+
+已完成：
+
+- `#gv-m365-timeline-root` 调整为 `right: 28px`，把 marker 和 rail 从最右侧原生滚动条区域移开。
+- `.gv-m365-timeline-rail` 保持 `pointer-events: none`，避免 rail 拦截原生滚动条区域。
+- `.gv-m365-timeline-marker` 保持 `pointer-events: auto`，marker 点击、active 状态和 `flow` / `jump` 滚动行为继续可用。
+- 真机复测确认 timeline root 为 `right: 28px`，marker 右边缘距离视口右侧约 `25px`；M365 原生滚动条在最右侧，timeline dot 已位于其左侧；Export UI、timeline、chatWidth 均保持单实例。
+
+当前限制：
+
+- 这次只修复 timeline 与原生滚动条的视觉/交互冲突；不实现 `gvM365TimelinePosition` 拖拽定位。
+- PDF/Image export 和真实 image-message 样本仍然 pending，不能记录为真机通过。
+
 ## 验证记录
+
+2026-04-30 M365 timeline 右侧滚动条避让修复后通过：
+
+```powershell
+npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts src/pages/content/m365ExportUi.test.ts src/pages/content/m365ChatWidth.test.ts src/pages/content/m365Timeline.test.ts src/pages/popup/__tests__/m365Settings.test.tsx
+npm.cmd run typecheck
+npm.cmd exec -- eslint src/pages/content/m365*.ts src/pages/content/m365*.test.ts
+npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md M365_CHANGELOG.md
+npm.cmd run build:chrome
+git diff --check
+```
+
+验证结果：
+
+- M365 + popup 回归：73 passed。
+- `typecheck`、eslint、Prettier check、`build:chrome`、`git diff --check` 均通过。
+- 真机复测使用 `L:\project\dist_chrome`、`https://m365.cloud.microsoft/chat/conversation/3a9c838f-bbfd-48aa-a85f-4e9570d20ac8` 和 CDP `9225`；在 `Voyager` isolated world 中确认 helper 存在，timeline 不压住最右侧原生滚动条，marker 点击仍可 active / jump。
+- 本地提交为 `e90f577 fix(m365): keep timeline off native scrollbar`，但截至本快照尚未 push 到 GitHub。
 
 2026-04-30 M365 Export UI 与 Timeline 视觉优化后通过：
 
