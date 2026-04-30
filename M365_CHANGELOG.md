@@ -376,14 +376,17 @@ git diff --check
 
 验证结果：
 
-- Targeted tests：6 个 test files、71 个 tests 全部通过。
+- Targeted tests：6 个 test files、72 个 tests 全部通过。
 - `typecheck` 通过。
 - M365 content files eslint 通过。
 - Prettier check 通过；`m365ExportUi.test.ts` 先由 Prettier 写回后复测通过。
 - `build:chrome` 通过；Vite 仅输出既有 dynamic import、重复 icon asset 和大 chunk warnings。
 - `git diff --check` 通过。
 - 初次沙箱内运行 Vitest 遇到已知 Windows `esbuild spawn EPERM`，按既有流程在提升后的真实 Windows 环境重跑同一条 `npm.cmd` 命令后通过。
-- 本轮尚未记录真实 M365 页面视觉通过；后续 reload `L:\project\dist_chrome` 后应确认右上角只有一个 `Export` 入口、弹窗 JSON / Markdown 导出正常、timeline rail/marker/tooltip 位置仍保持用户认可的原位置，并且 chatWidth、输入框、顶部栏、侧边栏和 M365 原生菜单不受影响。
+- 真机复测：Codex 重建 `L:\project\dist_chrome`，重启临时 Edge profile 并打开真实 M365 conversation `https://m365.cloud.microsoft/chat/conversation/3a9c838f-bbfd-48aa-a85f-4e9570d20ac8`；`Voyager` isolated world 存在，`window.__gvExtractCanonical` / `window.__gvExportM365Json` / `window.__gvExportM365Markdown` 均为 function，canonical 共 4 条 messages / 2 条 user messages。
+- 真机 UI 检查：`#gv-m365-export-ui-root`、`#gv-m365-export-ui-style`、单 `Export` trigger、dialog、timeline root/style/tooltip、chatWidth style 均为 1；旧 `[data-gv-m365-export-format]` 两按钮为 0。点击 Export 后弹窗显示 JSON / Markdown，Escape 可关闭。
+- 真机视觉发现并修复：第一轮截图显示顶部 timeline tooltip 会贴近/覆盖 Export 区域；`showTimelineTooltip()` 已改为读取 `#gv-m365-export-ui-root` rect 并在相交时左移避让，新增回归测试覆盖该场景。重建并重启 Edge 后复测确认 tooltip rect 与 Export rect 不相交，`intersectsExport === false`，marker click 后 active 正常。
+- Console 采样只观察到 M365 原生 CSP warning / 404 / CORS 资源错误，未观察到 Voyager/M365 UI 相关 exception；本轮没有触发真实导出下载，避免额外保存当前 conversation 内容。
 
 2026-04-30 M365 settings UI MVP 接入后通过：
 

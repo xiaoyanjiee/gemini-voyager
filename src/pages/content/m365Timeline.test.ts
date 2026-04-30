@@ -294,6 +294,57 @@ describe('m365Timeline', () => {
     expect(tooltip?.textContent).not.toMatch(/HTML|Element|\[object/);
   });
 
+  it('positions the tooltip away from the M365 export UI root', () => {
+    const exportRoot = document.createElement('div');
+    exportRoot.id = 'gv-m365-export-ui-root';
+    document.body.appendChild(exportRoot);
+
+    startWithConversation(createConversation([createMessage('user', 0, 'First prompt')]));
+
+    const marker = document.querySelector<HTMLButtonElement>('[data-gv-m365-timeline-marker]');
+    const tooltip = document.getElementById('gv-m365-timeline-tooltip');
+    expect(marker).not.toBeNull();
+    expect(tooltip).not.toBeNull();
+
+    vi.spyOn(exportRoot, 'getBoundingClientRect').mockReturnValue({
+      left: 1744,
+      right: 1856,
+      top: 72,
+      bottom: 108,
+      width: 112,
+      height: 36,
+      x: 1744,
+      y: 72,
+      toJSON: () => ({}),
+    } as DOMRect);
+    vi.spyOn(marker as HTMLButtonElement, 'getBoundingClientRect').mockReturnValue({
+      left: 1867,
+      right: 1897,
+      top: 73,
+      bottom: 103,
+      width: 30,
+      height: 30,
+      x: 1867,
+      y: 73,
+      toJSON: () => ({}),
+    } as DOMRect);
+    vi.spyOn(tooltip as HTMLElement, 'getBoundingClientRect').mockReturnValue({
+      left: 1575,
+      right: 1887,
+      top: 63,
+      bottom: 137,
+      width: 312,
+      height: 74,
+      x: 1575,
+      y: 63,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    marker?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+
+    expect(tooltip?.style.left).toBe('1420px');
+  });
+
   it('does not remove or modify the M365 export UI root', () => {
     const exportRoot = document.createElement('div');
     exportRoot.id = 'gv-m365-export-ui-root';

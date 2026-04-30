@@ -493,17 +493,30 @@ function showTimelineTooltip(marker: HTMLElement): void {
   const tooltip = ensureM365TimelineTooltip();
   const summary = marker.dataset.gvM365TimelineSummary || marker.getAttribute('aria-label') || '';
   const markerRect = marker.getBoundingClientRect();
-  const tooltipWidth = 280;
   const viewportPadding = 8;
 
   tooltip.textContent = summary;
   tooltip.hidden = false;
 
-  const left = Math.max(viewportPadding, markerRect.left - tooltipWidth - 12);
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const tooltipWidth = tooltipRect.width || 312;
+  const tooltipHeight = tooltipRect.height || 56;
+  const exportRootRect = document.getElementById('gv-m365-export-ui-root')?.getBoundingClientRect();
+  let left = Math.max(viewportPadding, markerRect.left - tooltipWidth - 12);
   const top = Math.max(
     viewportPadding,
-    Math.min(window.innerHeight - viewportPadding - 48, markerRect.top - 10),
+    Math.min(window.innerHeight - tooltipHeight - viewportPadding, markerRect.top - 10),
   );
+
+  if (
+    exportRootRect &&
+    top < exportRootRect.bottom + 8 &&
+    top + tooltipHeight > exportRootRect.top - 8 &&
+    left < exportRootRect.right + 8 &&
+    left + tooltipWidth > exportRootRect.left - 8
+  ) {
+    left = Math.max(viewportPadding, exportRootRect.left - tooltipWidth - 12);
+  }
 
   tooltip.style.left = `${left}px`;
   tooltip.style.top = `${top}px`;
