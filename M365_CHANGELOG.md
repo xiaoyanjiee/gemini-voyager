@@ -1,7 +1,7 @@
 # M365 Copilot 变更与进度文档
 
-最后更新：2026-04-29
-当前状态：M365 canonical baseline、export adapter baseline、JSON / Markdown export UI、M365 chatWidth MVP、M365 timeline MVP 和 rich content extraction 补强已落地，diagnostics 已改为手动 gate
+最后更新：2026-04-30
+当前状态：M365 canonical baseline、export adapter baseline、JSON / Markdown export UI、M365 chatWidth MVP、M365 timeline MVP、M365 settings UI MVP 和 rich content extraction 补强已落地，diagnostics 已改为手动 gate
 配套上下文：`M365_COPILOT_CONTEXT.md`
 
 后续 Codex 会话开始修改 M365 相关代码前，必须先阅读本文件和 `M365_COPILOT_CONTEXT.md`。任何改变 M365 selectors、canonical model、extractor 输出、export adapter、安全策略、浏览器验证流程或迁移优先级的任务，都必须同时更新这两个文档。
@@ -331,7 +331,7 @@ Plan 内容：
 
 - M365 settings MVP 只覆盖 chatWidth 和 timeline；不迁移 Gemini star/pin、preview panel、keyboard shortcuts、拖拽定位或完整 timeline settings。
 - `gvM365TimelinePosition` 目前只是 reset position 预留 key；本轮没有实现 M365 timeline 拖拽位置。
-- 真机 popup 视觉和 storage 实时生效仍需在用户已登录 M365 环境中最终人工确认；本轮已完成自动化验证和 build。
+- 真机 storage 实时生效已在用户已登录 M365 conversation 页面通过 Edge/CDP 验证；工具栏 popup 视觉仍建议由用户手动点开扩展按钮做最终确认。
 
 ## 验证记录
 
@@ -354,7 +354,11 @@ git diff --check
 - Prettier check 通过。
 - `build:chrome` 通过；Vite 仅输出既有 dynamic import、重复 icon asset 和大 chunk warnings。
 - `git diff --check` 通过。
-- 本轮尚未完成真实 M365 popup 手动验收；后续需要 reload `L:\project\dist_chrome` 后，在真实 M365 tab 打开 popup，确认 M365 设置视图、chatWidth 开关/滑杆、timeline 开关与 flow/jump 实时生效。
+- 真机 CDP 验证：Codex 启动 Edge 加载 `L:\project\dist_chrome`，打开真实 M365 conversation `https://m365.cloud.microsoft/chat/conversation/3a9c838f-bbfd-48aa-a85f-4e9570d20ac8`，在 `Voyager` isolated world 确认 `chrome.storage.sync` 可用，`window.__gvExtractCanonical` / `window.__gvExportM365Json` / `window.__gvExportM365Markdown` 均为 function。
+- 默认状态下 `#gv-m365-chat-width-style` 为 1、`gv-m365-chat-width-enabled` 存在、`#gv-m365-timeline-root` 为 1、`#gv-m365-timeline-style` 为 1、timeline marker 为 2、`#gv-m365-export-ui-root` 为 1。
+- storage 实时切换通过：写入 `gvM365ChatWidthEnabled: false` / `gvM365TimelineEnabled: false` 后，chatWidth style/root marker 和 timeline root/style/markers 均清理，export UI root 仍为 1；写入 `gvM365ChatWidthEnabled: true`、`gvM365ChatWidthPercent: 88`、`gvM365TimelineEnabled: true`、`gvM365TimelineScrollMode: "jump"` 后，chatWidth style 恢复且包含 `88vw`，timeline root/style/markers 恢复；最后恢复默认 `75` / `flow`。
+- timeline 点击行为真机验证通过：`jump` 模式点击 marker 调用 `scrollIntoView({ block: "start", behavior: "auto" })`，`flow` 模式调用 `scrollIntoView({ block: "start", behavior: "smooth" })`，目标元素为 M365 user message source element。
+- 工具栏 popup 视觉验收仍建议手动点开扩展按钮确认；本轮程序化打开 popup 时测试 Edge/CDP 会话已退出，因此未把 popup 视觉记为真机通过。
 
 2026-04-29 M365 timeline MVP 接入后通过：
 

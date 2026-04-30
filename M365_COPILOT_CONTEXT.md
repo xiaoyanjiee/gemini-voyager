@@ -199,6 +199,7 @@ M365 popup settings 路线：
 - `src/pages/content/m365Settings.ts` 集中定义 M365-only storage key：`gvM365ChatWidthEnabled`、`gvM365ChatWidthPercent`、`gvM365TimelineEnabled`、`gvM365TimelineScrollMode`、`gvM365TimelinePosition`。
 - `src/pages/popup/Popup.tsx` 会识别当前 active tab 是否为 `m365.cloud.microsoft`；M365 tab 下显示轻量 M365 设置卡片，不混入 Gemini / AI Studio 的完整设置页。
 - M365 chatWidth 和 timeline 均默认开启；timeline MVP 支持 `flow` / `jump`，其中 `flow` 使用 smooth scroll，`jump` 使用 auto scroll。
+- 2026-04-30 真机 CDP 验证确认：在 `Voyager` isolated world 写入 M365 storage key 后，chatWidth 开关/宽度百分比、timeline 开关和 `flow` / `jump` scroll mode 都会实时作用到真实 M365 conversation 页面；export UI root 不受影响。
 - 当前 M365 popup settings 不迁移 Gemini star/pin、preview panel、keyboard shortcuts、拖拽位置或完整 timeline manager。
 
 ## Windows 本地浏览器验证流程
@@ -374,6 +375,10 @@ git diff --check
 
 最近一次真机验证：
 
+- 2026-04-30，Codex 启动 Edge 加载 `L:\project\dist_chrome`，打开真实 M365 conversation `https://m365.cloud.microsoft/chat/conversation/3a9c838f-bbfd-48aa-a85f-4e9570d20ac8`；在 `Voyager` isolated world 确认 `chrome.storage.sync` 可用，`window.__gvExtractCanonical` / `window.__gvExportM365Json` / `window.__gvExportM365Markdown` 均存在。
+- M365 settings 真机 storage 验证通过：默认状态 chatWidth style、timeline root/style/marker 和 export UI root 均为单实例；关闭 `gvM365ChatWidthEnabled` / `gvM365TimelineEnabled` 后 chatWidth 与 timeline UI 清理，export UI root 保留；设置 `gvM365ChatWidthPercent: 88` 后 CSS 包含 `88vw`；恢复默认 `75` / `flow` 后状态正常。
+- M365 timeline scroll mode 真机验证通过：`gvM365TimelineScrollMode: "jump"` 时点击 marker 调用 `scrollIntoView({ block: "start", behavior: "auto" })`，`flow` 时调用 `behavior: "smooth"`，目标元素为对应 M365 user message source element。
+- 工具栏 popup 视觉仍建议手动点开扩展按钮确认；本轮程序化打开 popup 时测试 Edge/CDP 会话退出，因此只记录 storage 真实生效和 popup 单测覆盖，不记录 popup 视觉真机通过。
 - 2026-04-29，Codex 启动独立 Edge 测试窗口，加载 `L:\project\dist_chrome`，并打开 `https://m365.cloud.microsoft/chat`。
 - 用户在真实 M365 Copilot 页面确认右上角最小导出 UI 可见，`Export JSON` 和 `Export Markdown` 两个按钮点击后均能正常导出文件。
 - 这标记 M365 最小导出 UI 的真实页面 smoke test 通过；更深入的内容校验仍可在未来针对更多真实 conversations 继续补充。
