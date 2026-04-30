@@ -76,63 +76,111 @@ function ensureM365TimelineStyle(): void {
   width: 24px;
   pointer-events: none;
   font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --gv-m365-timeline-marker-color: #94a3b8;
+  --gv-m365-timeline-marker-active-color: #0f6cbd;
+  --gv-m365-timeline-bar-bg: rgba(248, 250, 252, 0.88);
+  --gv-m365-timeline-tooltip-bg: #ffffff;
+  --gv-m365-timeline-tooltip-text: #0f172a;
+  --gv-m365-timeline-tooltip-border: #e2e8f0;
+  --gv-m365-timeline-tooltip-shadow: 0 12px 36px rgba(2, 8, 23, 0.18), 0 3px 8px rgba(2, 8, 23, 0.08);
 }
 
 .gv-m365-timeline-rail {
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: 999px;
+  border-radius: 12px;
+  overflow: visible;
   pointer-events: auto;
 }
 
 .gv-m365-timeline-rail::before {
   content: "";
   position: absolute;
-  inset: 0 11px;
-  border-radius: 999px;
-  background: rgba(97, 97, 97, 0.12);
+  inset: 0;
+  left: 50%;
+  width: 24px;
+  border-radius: 12px;
+  background: var(--gv-m365-timeline-bar-bg);
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.08);
+  transform: translateX(-50%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .gv-m365-timeline-marker {
   position: absolute;
   left: 50%;
-  width: 12px;
-  height: 12px;
+  width: 30px;
+  height: 30px;
   padding: 0;
-  border: 2px solid #ffffff;
-  border-radius: 50%;
-  background: #6264a7;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.24);
+  border: none;
+  border-radius: 999px;
+  background: transparent;
   cursor: pointer;
   transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.gv-m365-timeline-marker::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--gv-m365-timeline-marker-color);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.92), 0 2px 8px rgba(15, 23, 42, 0.22);
+  transform: translate(-50%, -50%);
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 
 .gv-m365-timeline-marker:hover,
 .gv-m365-timeline-marker:focus-visible,
 .${M365_TIMELINE_ACTIVE_CLASS} {
-  background: #0f6cbd;
   outline: none;
-  transform: translate(-50%, -50%) scale(1.2);
+}
+
+.gv-m365-timeline-marker:hover::after,
+.gv-m365-timeline-marker:focus-visible::after {
+  background: var(--gv-m365-timeline-marker-active-color);
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+.${M365_TIMELINE_ACTIVE_CLASS}::after {
+  background: var(--gv-m365-timeline-marker-active-color);
+  box-shadow:
+    0 0 0 3px var(--gv-m365-timeline-marker-active-color),
+    0 0 14px rgba(15, 108, 189, 0.5);
 }
 
 .gv-m365-timeline-marker-stale {
-  opacity: 0.58;
+  opacity: 0.54;
+}
+
+.gv-m365-timeline-marker-stale::after {
+  background: transparent;
+  border: 2px solid var(--gv-m365-timeline-marker-color);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.88);
 }
 
 #${M365_TIMELINE_TOOLTIP_ID} {
   position: fixed;
   z-index: 2147483646;
-  max-width: 280px;
-  padding: 7px 9px;
-  border: 1px solid rgba(60, 64, 67, 0.18);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
-  color: #242424;
-  font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  max-width: 288px;
+  padding: 10px 12px;
+  border: 1px solid var(--gv-m365-timeline-tooltip-border);
+  border-radius: 14px;
+  background: var(--gv-m365-timeline-tooltip-bg);
+  box-shadow: var(--gv-m365-timeline-tooltip-shadow);
+  color: var(--gv-m365-timeline-tooltip-text);
+  font-family: "Google Sans", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 1.5;
   overflow-wrap: anywhere;
   pointer-events: none;
 }
@@ -142,25 +190,28 @@ function ensureM365TimelineStyle(): void {
 }
 
 @media (prefers-color-scheme: dark) {
-  .gv-m365-timeline-rail::before {
-    background: rgba(255, 255, 255, 0.24);
+  #${M365_TIMELINE_ROOT_ID} {
+    --gv-m365-timeline-marker-color: #475569;
+    --gv-m365-timeline-marker-active-color: #60cdff;
+    --gv-m365-timeline-bar-bg: rgba(2, 6, 23, 0.75);
+    --gv-m365-timeline-tooltip-bg: #0b1220;
+    --gv-m365-timeline-tooltip-text: #e2e8f0;
+    --gv-m365-timeline-tooltip-border: #1f2937;
+    --gv-m365-timeline-tooltip-shadow: 0 12px 36px rgba(0, 0, 0, 0.42), 0 3px 8px rgba(0, 0, 0, 0.24);
   }
 
-  .gv-m365-timeline-marker {
-    border-color: #202020;
-    background: #8b8cc7;
+  .gv-m365-timeline-marker::after {
+    box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.92), 0 2px 8px rgba(0, 0, 0, 0.34);
   }
 
-  .gv-m365-timeline-marker:hover,
-  .gv-m365-timeline-marker:focus-visible,
-  .${M365_TIMELINE_ACTIVE_CLASS} {
-    background: #60cdff;
+  .gv-m365-timeline-marker-stale::after {
+    box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.88);
   }
 
-  #${M365_TIMELINE_TOOLTIP_ID} {
-    border-color: rgba(255, 255, 255, 0.16);
-    background: rgba(32, 32, 32, 0.96);
-    color: #f5f5f5;
+  .${M365_TIMELINE_ACTIVE_CLASS}::after {
+    box-shadow:
+      0 0 0 3px var(--gv-m365-timeline-marker-active-color),
+      0 0 14px rgba(96, 205, 255, 0.46);
   }
 }
 `;

@@ -319,6 +319,25 @@ describe('m365Timeline', () => {
     expect(css).not.toContain('chat-window');
   });
 
+  it('keeps visual marker, active, stale, and tooltip names M365-only', () => {
+    const first = createMessage('user', 0, 'First prompt');
+    const second = createMessage('user', 1, 'Second prompt');
+    second.sourceElement.remove();
+    const conversation = createConversation([first, second]);
+
+    startWithConversation(conversation);
+
+    const marker = document.querySelector<HTMLButtonElement>('[data-gv-m365-timeline-marker]');
+    marker?.click();
+
+    const css = document.getElementById('gv-m365-timeline-style')?.textContent || '';
+    expect(css).toContain('gv-m365-timeline-marker');
+    expect(css).toContain('gv-m365-timeline-marker-active');
+    expect(css).toContain('gv-m365-timeline-marker-stale');
+    expect(css).toContain('gv-m365-timeline-tooltip');
+    expect(marker?.classList.contains('gv-m365-timeline-marker-active')).toBe(true);
+  });
+
   it('does not import Gemini timeline code or reference Gemini selectors/storage keys', () => {
     const source = readFileSync('src/pages/content/m365Timeline.ts', 'utf8');
 

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -227,15 +228,112 @@ describe('M365 minimal export UI', () => {
     expect(downloadedContent).not.toContain('Node');
   });
 
-  it('injects one M365-only UI root and style idempotently', () => {
+  it('injects one M365-only UI root, style, and trigger idempotently', () => {
     startM365ExportUi();
     startM365ExportUi();
 
     expect(document.querySelectorAll('[data-gv-m365-export-ui]')).toHaveLength(1);
     expect(document.querySelectorAll('#gv-m365-export-ui-style')).toHaveLength(1);
-    expect(document.querySelectorAll('[data-gv-m365-export-format="json"]')).toHaveLength(1);
-    expect(document.querySelectorAll('[data-gv-m365-export-format="markdown"]')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-gv-m365-export-trigger]')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-gv-m365-export-dialog]')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-gv-m365-export-option="json"]')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-gv-m365-export-option="markdown"]')).toHaveLength(1);
     expect(document.querySelector('.gv-logo-dropdown-wrapper')).toBeNull();
     expect(document.querySelector('.gv-export-dialog')).toBeNull();
+  });
+
+  it('opens a M365-only export dialog from the single trigger', () => {
+    startM365ExportUi();
+
+    const root = document.querySelector<HTMLElement>('[data-gv-m365-export-ui]');
+    const trigger = document.querySelector<HTMLButtonElement>('[data-gv-m365-export-trigger]');
+    const dialog = document.querySelector<HTMLElement>('[data-gv-m365-export-dialog]');
+
+    expect(root?.dataset.open).toBe('false');
+    expect(dialog?.hidden).toBe(true);
+
+    trigger?.click();
+
+    expect(root?.dataset.open).toBe('true');
+    expect(trigger?.getAttribute('aria-expanded')).toBe('true');
+    expect(dialog?.hidden).toBe(false);
+    expect(dialog?.textContent).toContain('JSON');
+    expect(dialog?.textContent).toContain('Markdown');
+  });
+
+  it('runs the selected M365 export format from the dialog', () => {
+    const runExportAction = vi.fn();
+    startM365ExportUi({ runExportAction });
+
+    document.querySelector<HTMLButtonElement>('[data-gv-m365-export-trigger]')?.click();
+    document.querySelector<HTMLInputElement>('input[value="json"]')?.click();
+    document.querySelector<HTMLButtonElement>('[data-gv-m365-export-confirm]')?.click();
+
+    expect(runExportAction).toHaveBeenCalledWith('json');
+    expect(document.querySelector<HTMLElement>('[data-gv-m365-export-ui]')?.dataset.open).toBe(
+      'false',
+    );
+  });
+
+  it('closes the M365 export dialog via cancel, outside click, and Escape', () => {
+    startM365ExportUi();
+
+    const root = document.querySelector<HTMLElement>('[data-gv-m365-export-ui]');
+    const trigger = document.querySelector<HTMLButtonElement>('[data-gv-m365-export-trigger]');
+
+    trigger?.click();
+    expect(root?.dataset.open).toBe('true');
+    document.querySelector<HTMLButtonElement>('[data-gv-m365-export-cancel]')?.click();
+    expect(root?.dataset.open).toBe('false');
+
+    trigger?.click();
+    expect(root?.dataset.open).toBe('true');
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(root?.dataset.open).toBe('false');
+
+    trigger?.click();
+    expect(root?.dataset.open).toBe('true');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(root?.dataset.open).toBe('false');
+  });
+
+  it('shows M365-only toast status without removing export or timeline roots', () => {
+    vi.useFakeTimers();
+    const timelineRoot = document.createElement('nav');
+    timelineRoot.id = 'gv-m365-timeline-root';
+    document.body.appendChild(timelineRoot);
+    startM365ExportUi();
+
+    runM365ExportAction('json', {
+      extractConversation: createExportableConversation,
+      buildTurns: M365ExportService.buildTurns.bind(M365ExportService),
+      serializeJsonExport: vi.fn(() => '{"ok":true}'),
+      downloadText: vi.fn(),
+      now: () => new Date('2026-04-29T01:02:03.004Z'),
+    });
+
+    const toast = document.getElementById('gv-m365-export-toast');
+    expect(toast?.textContent).toBe('Exported JSON.');
+    expect(toast?.dataset.tone).toBe('success');
+    expect(toast?.classList.contains('gv-m365-export-toast-visible')).toBe(true);
+    expect(document.getElementById('gv-m365-export-ui-root')).not.toBeNull();
+    expect(document.getElementById('gv-m365-timeline-root')).toBe(timelineRoot);
+
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
+  it('does not reference Gemini export selectors, storage keys, or original dialog classes', () => {
+    startM365ExportUi();
+
+    const css = document.getElementById('gv-m365-export-ui-style')?.textContent || '';
+    const source = readFileSync('src/pages/content/m365ExportUi.ts', 'utf8');
+    const combined = `${css}\n${source}`;
+
+    expect(combined).not.toContain('geminiTimeline');
+    expect(combined).not.toContain('gemini-timeline');
+    expect(combined).not.toContain('chat-window');
+    expect(combined).not.toContain('gv-export-dialog');
+    expect(combined).not.toContain('geminiChatWidth');
   });
 });

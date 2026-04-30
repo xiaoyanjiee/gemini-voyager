@@ -1,7 +1,7 @@
 # M365 Copilot 变更与进度文档
 
 最后更新：2026-04-30
-当前状态：M365 canonical baseline、export adapter baseline、JSON / Markdown export UI、M365 chatWidth MVP、M365 timeline MVP、M365 settings UI MVP 和 rich content extraction 补强已落地，diagnostics 已改为手动 gate
+当前状态：M365 canonical baseline、export adapter baseline、JSON / Markdown Export 弹窗、M365 chatWidth MVP、M365 timeline MVP、M365 settings UI MVP 和 rich content extraction 补强已落地，diagnostics 已改为手动 gate
 配套上下文：`M365_COPILOT_CONTEXT.md`
 
 后续 Codex 会话开始修改 M365 相关代码前，必须先阅读本文件和 `M365_COPILOT_CONTEXT.md`。任何改变 M365 selectors、canonical model、extractor 输出、export adapter、安全策略、浏览器验证流程或迁移优先级的任务，都必须同时更新这两个文档。
@@ -53,9 +53,9 @@
 - M365 Markdown export 标题固定使用 `M365 Copilot`，不再使用 M365 页面 `document.title`；M365 页面标题可能是首条 prompt。
 - M365 code block 提取已补强：`pre` 和多行 `code` 输出 fenced code block，并会归一化 M365 偶发的语言标签 + 代码 + 残缺反引号片段。
 - `window.__gvExportM365Json()` / `window.__gvExportM365Markdown()` 是仅用于本地验证的 M365 debug/dev 入口，会下载当前页面 JSON / Markdown 并保存对应的 `window.__gvLastM365*Export`。
-- Export adapter 已接入 M365-only 最小 UI，支持 JSON / Markdown；不改变 Gemini export 行为。
+- Export adapter 已接入 M365-only UI：右上角只显示一个 `Export` trigger，点击后打开 JSON / Markdown 弹窗，状态反馈使用独立 toast；不改变 Gemini export 行为。
 - M365 chatWidth MVP 已接入 M365-only 启动分支：只注入隔离 CSS 和 HTML marker，不读取消息正文、不依赖 canonical/export services、不改变 Gemini chatWidth；真实页面反馈初版未生效后，已追加外层 `chatMessageContainer...` 包装 div 的宽度覆盖。
-- M365 timeline MVP 已接入 M365-only 启动分支：基于 `extractM365CanonicalConversation()` 和 `M365TimelineService.buildIndex()` 生成 user-message markers，点击 marker 滚动到对应 `CanonicalMessage.sourceElement`，不复用 Gemini timeline selectors/storage/UI state；已按 conversation URL 缓存已见 markers，避免 M365 虚拟列表卸载不可见消息时节点缩水或标题漂移。
+- M365 timeline MVP 已接入 M365-only 启动分支：基于 `extractM365CanonicalConversation()` 和 `M365TimelineService.buildIndex()` 生成 user-message markers，点击 marker 滚动到对应 `CanonicalMessage.sourceElement`，不复用 Gemini timeline selectors/storage/UI state；已按 conversation URL 缓存已见 markers，避免 M365 虚拟列表卸载不可见消息时节点缩水或标题漂移；本轮只优化 rail、marker、active/stale 和 tooltip 视觉。
 
 ## 阶段变更记录
 
@@ -333,7 +333,57 @@ Plan 内容：
 - `gvM365TimelinePosition` 目前只是 reset position 预留 key；本轮没有实现 M365 timeline 拖拽位置。
 - 真机 storage 实时生效已在用户已登录 M365 conversation 页面通过 Edge/CDP 验证；工具栏 popup 视觉仍建议由用户手动点开扩展按钮做最终确认。
 
+### 12. M365 Export UI 与 Timeline 视觉优化
+
+目标是让 M365 导出入口更接近 Voyager 的轻量弹窗体验，同时只对 timeline 做视觉对齐优化；不迁移 Gemini selector、storage key、timeline manager、preview panel、star/pin、拖拽、PDF 或 Image export。
+
+Plan 内容：
+
+- 把 M365 右上角两个常驻导出按钮改成一个固定 `Export` trigger。
+- 点击 trigger 后显示 M365-only 弹窗，提供 JSON / Markdown 两个格式选项、说明文字、Cancel / Export 按钮和清晰 hover/focus 状态。
+- 导出动作继续调用 `runM365ExportAction('json' | 'markdown')`，不改变 canonical extraction、serializer、filename 和安全过滤逻辑。
+- 成功/失败状态改为独立 M365-only toast，避免按钮区高度跳动。
+- Timeline 保持 user-message markers、canonical summary tooltip、click-to-scroll、`flow` / `jump` 行为不变，只优化 rail、marker、active、stale 和 tooltip 的视觉。
+- Timeline 位置保持用户已认可的原位置，不擅自贴近浏览器滚动条；不迁移 Voyager preview/search/star/drag/slider 或 Gemini timeline manager。
+
+已完成：
+
+- `src/pages/content/m365ExportUi.ts` 保留 `#gv-m365-export-ui-root` / `#gv-m365-export-ui-style`，新增单 `Export` trigger、`#gv-m365-export-dialog` 和 `#gv-m365-export-toast`。
+- M365 Export 弹窗使用 `gv-m365-export-*` class/data attributes；JSON / Markdown 选择和 Cancel、外部点击、Escape 关闭都在 root 内处理。
+- `runM365ExportAction()` 路径未改，JSON / Markdown 仍只消费 `extractM365CanonicalConversation()` 与 `M365ExportService`。
+- `src/pages/content/m365Timeline.ts` 只更新注入 CSS；root/style/tooltip id、marker 数据、缓存逻辑、click-to-scroll 和 storage 设置行为均保持原实现。
+- `m365ExportUi.test.ts` 覆盖单 root/style/trigger、弹窗打开、JSON/Markdown action、Cancel/外部点击/Escape 关闭、toast 不移除 export/timeline root、无 Gemini dialog class 或 storage 引用。
+- `m365Timeline.test.ts` 覆盖视觉 class 仍为 `gv-m365-timeline-*`、active/stale/tooltip 命名保持隔离、CSS 不引用 Gemini timeline selector/storage，marker click 和 `flow` / `jump` 行为继续通过。
+
+当前限制：
+
+- 本轮 Export UI 仍只支持 JSON / Markdown；PDF/Image export 继续延期。
+- 本轮 timeline 只做视觉优化，不做 preview panel、search、star/pin、marker level、拖拽定位、滚动同步或完整 Gemini timeline 生态。
+- 程序化验证已通过；真实 M365 页面 reload 后仍需要用户或后续 Codex 做最终视觉确认，重点看 Export 弹窗、timeline 位置和原生右侧轨道是否舒适。
+
 ## 验证记录
+
+2026-04-30 M365 Export UI 与 Timeline 视觉优化后通过：
+
+```powershell
+npm.cmd run test -- src/pages/content/m365ChatExtractor.test.ts src/pages/content/m365FeatureServices.test.ts src/pages/content/m365ExportUi.test.ts src/pages/content/m365ChatWidth.test.ts src/pages/content/m365Timeline.test.ts src/pages/popup/__tests__/m365Settings.test.tsx
+npm.cmd run typecheck
+npm.cmd exec -- eslint src/pages/content/m365*.ts src/pages/content/m365*.test.ts
+npm.cmd exec -- prettier --check src/pages/content/m365*.ts src/pages/content/m365*.test.ts M365_COPILOT_CONTEXT.md M365_CHANGELOG.md
+npm.cmd run build:chrome
+git diff --check
+```
+
+验证结果：
+
+- Targeted tests：6 个 test files、71 个 tests 全部通过。
+- `typecheck` 通过。
+- M365 content files eslint 通过。
+- Prettier check 通过；`m365ExportUi.test.ts` 先由 Prettier 写回后复测通过。
+- `build:chrome` 通过；Vite 仅输出既有 dynamic import、重复 icon asset 和大 chunk warnings。
+- `git diff --check` 通过。
+- 初次沙箱内运行 Vitest 遇到已知 Windows `esbuild spawn EPERM`，按既有流程在提升后的真实 Windows 环境重跑同一条 `npm.cmd` 命令后通过。
+- 本轮尚未记录真实 M365 页面视觉通过；后续 reload `L:\project\dist_chrome` 后应确认右上角只有一个 `Export` 入口、弹窗 JSON / Markdown 导出正常、timeline rail/marker/tooltip 位置仍保持用户认可的原位置，并且 chatWidth、输入框、顶部栏、侧边栏和 M365 原生菜单不受影响。
 
 2026-04-30 M365 settings UI MVP 接入后通过：
 
