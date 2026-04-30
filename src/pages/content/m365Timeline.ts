@@ -70,7 +70,7 @@ function ensureM365TimelineStyle(): void {
 #${M365_TIMELINE_ROOT_ID} {
   position: fixed;
   top: 60px;
-  right: 18px;
+  right: 28px;
   bottom: 154px;
   z-index: 2147483645;
   width: 24px;
@@ -91,7 +91,7 @@ function ensureM365TimelineStyle(): void {
   height: 100%;
   border-radius: 12px;
   overflow: visible;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .gv-m365-timeline-rail::before {

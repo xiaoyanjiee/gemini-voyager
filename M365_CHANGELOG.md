@@ -352,8 +352,9 @@ Plan 内容：
 - M365 Export 弹窗使用 `gv-m365-export-*` class/data attributes；JSON / Markdown 选择和 Cancel、外部点击、Escape 关闭都在 root 内处理。
 - `runM365ExportAction()` 路径未改，JSON / Markdown 仍只消费 `extractM365CanonicalConversation()` 与 `M365ExportService`。
 - `src/pages/content/m365Timeline.ts` 只更新注入 CSS；root/style/tooltip id、marker 数据、缓存逻辑、click-to-scroll 和 storage 设置行为均保持原实现。
+- 用户反馈 visual pass 后的 timeline 仍挡住 M365 原生右侧滚动条；本轮把 timeline root 左移到 `right: 28px`，并将 rail 本身改为 `pointer-events: none`，只让 marker button 保持可点击，给最右侧原生滚动条留出视觉和交互空间。
 - `m365ExportUi.test.ts` 覆盖单 root/style/trigger、弹窗打开、JSON/Markdown action、Cancel/外部点击/Escape 关闭、toast 不移除 export/timeline root、无 Gemini dialog class 或 storage 引用。
-- `m365Timeline.test.ts` 覆盖视觉 class 仍为 `gv-m365-timeline-*`、active/stale/tooltip 命名保持隔离、CSS 不引用 Gemini timeline selector/storage，marker click 和 `flow` / `jump` 行为继续通过。
+- `m365Timeline.test.ts` 覆盖视觉 class 仍为 `gv-m365-timeline-*`、active/stale/tooltip 命名保持隔离、rail 不拦截原生滚动条区域、CSS 不引用 Gemini timeline selector/storage，marker click 和 `flow` / `jump` 行为继续通过。
 
 当前限制：
 
@@ -386,6 +387,7 @@ git diff --check
 - 真机复测：Codex 重建 `L:\project\dist_chrome`，重启临时 Edge profile 并打开真实 M365 conversation `https://m365.cloud.microsoft/chat/conversation/3a9c838f-bbfd-48aa-a85f-4e9570d20ac8`；`Voyager` isolated world 存在，`window.__gvExtractCanonical` / `window.__gvExportM365Json` / `window.__gvExportM365Markdown` 均为 function，canonical 共 4 条 messages / 2 条 user messages。
 - 真机 UI 检查：`#gv-m365-export-ui-root`、`#gv-m365-export-ui-style`、单 `Export` trigger、dialog、timeline root/style/tooltip、chatWidth style 均为 1；旧 `[data-gv-m365-export-format]` 两按钮为 0。点击 Export 后弹窗显示 JSON / Markdown，Escape 可关闭。
 - 真机视觉发现并修复：第一轮截图显示顶部 timeline tooltip 会贴近/覆盖 Export 区域；`showTimelineTooltip()` 已改为读取 `#gv-m365-export-ui-root` rect 并在相交时左移避让，新增回归测试覆盖该场景。重建并重启 Edge 后复测确认 tooltip rect 与 Export rect 不相交，`intersectsExport === false`，marker click 后 active 正常。
+- 用户随后反馈 timeline 过多占用原生右侧滚动条区域；已将 root 调整为 `right: 28px`，并把 `.gv-m365-timeline-rail` 改为 `pointer-events: none`，保留 `.gv-m365-timeline-marker` 的 `pointer-events: auto`。新增回归测试确认 rail 不再拦截，targeted timeline 测试 17 个用例通过。
 - Console 采样只观察到 M365 原生 CSP warning / 404 / CORS 资源错误，未观察到 Voyager/M365 UI 相关 exception；本轮没有触发真实导出下载，避免额外保存当前 conversation 内容。
 
 2026-04-30 M365 settings UI MVP 接入后通过：

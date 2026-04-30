@@ -389,6 +389,16 @@ describe('m365Timeline', () => {
     expect(marker?.classList.contains('gv-m365-timeline-marker-active')).toBe(true);
   });
 
+  it('keeps the rail from intercepting the native M365 scrollbar area', () => {
+    startWithConversation(createConversation([createMessage('user', 0, 'First prompt')]));
+
+    const css = document.getElementById('gv-m365-timeline-style')?.textContent || '';
+
+    expect(css).toContain('right: 28px');
+    expect(css).toMatch(/\.gv-m365-timeline-rail\s*{[\s\S]*pointer-events: none;/);
+    expect(css).toMatch(/\.gv-m365-timeline-marker\s*{[\s\S]*pointer-events: auto;/);
+  });
+
   it('does not import Gemini timeline code or reference Gemini selectors/storage keys', () => {
     const source = readFileSync('src/pages/content/m365Timeline.ts', 'utf8');
 

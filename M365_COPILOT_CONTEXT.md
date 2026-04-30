@@ -430,6 +430,7 @@ git diff --check
 - 2026-04-30 已接入 M365-only popup settings：默认开启，读取 `gvM365TimelineEnabled` / `gvM365TimelineScrollMode`；关闭时清理 root/style/tooltip，`flow` 使用 smooth scroll，`jump` 使用 auto scroll。
 - 本次不接星标、preview panel、keyboard shortcuts、Gemini timeline manager、Gemini timeline selectors 或 Gemini storage；不新增消息正文扫描路径，不修改 M365 export/chatWidth/extractor 行为。
 - 右侧 timeline rail 使用独立 `gv-m365-timeline-*` class/data attributes，并避开右上角 M365 export UI；2026-04-29 真实 conversation CDP smoke 已确认 marker 可见、tooltip 正常、点击后 active、刷新后不重复注入。后续仍需在更多真实 conversations 上确认不同长度和滚动状态下的视觉位置。
+- 2026-04-30 用户反馈视觉优化后的 timeline 仍会挡住 M365 原生右侧滚动条；已把 timeline root 左移到 `right: 28px`，并将 rail 本身改为 `pointer-events: none`，只保留 marker button 可点击，给最右侧原生滚动条留出视觉和交互空间。
 
 后续更新规则：
 
