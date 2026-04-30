@@ -1,21 +1,21 @@
 # M365 Copilot 迁移架构基线
 
-最后更新：2026-04-30
-状态：M365 adapter 活跃基线，JSON / Markdown export MVP 与 Voyager 风格 M365-only Export 弹窗已接入，M365 chatWidth / timeline MVP 已接入并支持 M365-only popup 设置，rich content extraction 已补强
+最后更新：2026-05-01
+状态：M365 adapter 活跃基线，JSON / Markdown export MVP 与 Voyager 风格 M365-only Export 弹窗已接入，M365 chatWidth / timeline MVP 已接入并支持 M365-only popup 设置，chatWidth 已通过 conversation + new chat 真机硬化验证，rich content extraction 已补强
 目标站点：`https://m365.cloud.microsoft/*`
 
 这是后续 Codex 会话的交接文档。修改 M365 专用代码前，必须先阅读本文件。
 桌面上的历史 `PLAN.md` / `PLAN2.md` 以及 M365 export adapter 计划已吸收到本文档；新会话不需要再导入这三份 plan。
 
-## 2026-04-30 交接快照
+## 2026-05-01 交接快照
 
 项目位置与分支：
 
 - 当前项目在 `L:\project`，分支是 `m365-probe`。
 - 后续会话开始前必须先读：`M365_COPILOT_CONTEXT.md`、`M365_CHANGELOG.md`、`AGENTS.md`、`CLAUDE.md`。
 - 当前有一个无关 staged 文件 `.agents/skills/safari-release/SKILL.md`，不能误提交。
-- 当前本地最新提交是 `e90f577 fix(m365): keep timeline off native scrollbar`。
-- 当前本地 `m365-probe` 领先 `origin/m365-probe` 1 个提交；远端目前停在 `2fb4617 fix(m365): avoid timeline tooltip export overlap`。
+- 本轮开始前本地最新提交是 `fec078b docs(m365): record handoff snapshot`。
+- 本轮开始前本地 `m365-probe` 领先 `origin/m365-probe` 2 个提交；远端目前停在 `2fb4617 fix(m365): avoid timeline tooltip export overlap`。
 - 如果需要同步 GitHub，只 push `m365-probe`，不要碰 `main`，提交和 push 前继续避开 `.agents/skills/safari-release/SKILL.md`。
 
 已经完成的 M365 主线：
@@ -32,6 +32,7 @@
 10. M365 settings UI MVP。
 11. M365 Export UI 与 Timeline 视觉优化。
 12. M365 timeline 右侧滚动条避让修复。
+13. M365 chatWidth conversation + new chat 真机硬化验证。
 
 当前边界仍然不变：M365-only，不改 Gemini，不复用 Gemini selector/storage/timeline manager，不新增 M365 DOM 正文扫描入口；export、timeline、layout 都以 `CanonicalConversation` 或现有 M365 模块边界为准。
 
@@ -331,7 +332,7 @@ Windows 环境注意事项：
 - 真实 M365 image-message DOM 仍需要更多样本采集和验证。
 - 更复杂 rich Markdown fidelity 仍需要更多真实样本；当前已覆盖段落、粗体、斜体、基础列表、基础链接、code/pre、多行 code、M365 残缺 code-fence 片段、semantic table 和 images。
 - Conversation loading 可能滞后于 URL 变化；未来 UI entrypoints 需要围绕 `[role="article"]` 做 wait/retry。
-- M365 chatWidth MVP 初版只打到 article 层，真实页面仍被外层 `chatMessageContainer...` 包装 div 限制宽度；已追加容器层 CSS，fresh Edge + 最新 `dist_chrome` 的 CDP smoke 确认 message container 为 `1440px`、assistant content 约 `1388px`、user content 约 `1368px`。仍需要在更多真实、已登录、有消息的 M365 conversations 上做人工视觉确认。
+- M365 chatWidth MVP 初版只打到 article 层，真实页面曾被外层 `chatMessageContainer...` 包装 div 限制宽度；已追加容器层 CSS。2026-05-01 使用最新 `dist_chrome` 在真实 conversation 页与新聊天页完成 CDP 真机硬化验证：conversation 页 80vw message container 约 `1530px`，88vw 时约 `1604px`，未退回旧 `852px` 限制；new chat 页无 message container，输入框保持约 `752px`，未被 ChatWidth selector 错误放宽。
 - M365 timeline MVP 已通过单个真实 conversation 的 CDP smoke；已修复 M365 虚拟列表卸载不可见消息时 marker 从 4 个变 3 个、标题被当前 DOM 窗口覆盖的问题。仍需要在更多 conversation 长度、滚动位置、侧边栏/菜单状态下确认右侧 marker 不冲突。
 - Sidebar/conversation traversal 仍然延期。
 - `gv-m365-diag-marker` 等 diagnostics markers 不能影响提取。
@@ -341,7 +342,7 @@ Windows 环境注意事项：
 1. 在更多真实 M365 conversations 上稳定 `CanonicalConversation`，包含 image/code/table 样本。
 2. 增加从 `CanonicalConversation` 到现有 export service inputs 的只读 export adapter。
 3. 继续验证 M365 timeline MVP，并且任何后续增强都必须基于 `CanonicalMessage.sourceElement`，不引入新的 Gemini selector 或 storage。
-4. 继续验证并收紧 M365 chatWidth MVP，只使用 CSS 和必要的 canonical anchors。
+4. 继续在更多显示尺寸下观察 M365 chatWidth；如需修复，只处理 CSS/layout，并且只使用 M365-only selector 或必要的 canonical anchors。
 5. 生产入口保持 diagnostics 手动 gate；未来可删除临时 diagnostics 模块。
 
 ## 更新协议
@@ -406,6 +407,7 @@ git diff --check
 
 最近一次真机验证：
 
+- 2026-05-01，Codex 重建 `L:\project\dist_chrome`，启动专用 Edge profile 并加载真实 M365 conversation 与新聊天页；在 `Voyager` isolated world 确认 helpers 与 `chrome.storage.sync` 存在。conversation 页 `#gv-m365-chat-width-style` / `#gv-m365-export-ui-root` / `#gv-m365-timeline-root` 均为单实例，80vw message container 约 `1530px`，88vw 时约 `1604px`，关闭 `gvM365ChatWidthEnabled` 会移除 style 和 HTML marker，恢复后无横向溢出；new chat 页无 message container，输入框约 `752px`，ChatWidth 开关与 88vw 切换不会错误放宽输入框。Console 仅观察到 M365 原生 CSP warning / profile photo 404，未观察到 Voyager/M365 ChatWidth exception。本轮没有改代码。
 - 2026-04-30，Codex 启动 Edge 加载 `L:\project\dist_chrome`，打开真实 M365 conversation `https://m365.cloud.microsoft/chat/conversation/3a9c838f-bbfd-48aa-a85f-4e9570d20ac8`；在 `Voyager` isolated world 确认 `chrome.storage.sync` 可用，`window.__gvExtractCanonical` / `window.__gvExportM365Json` / `window.__gvExportM365Markdown` 均存在。
 - M365 settings 真机 storage 验证通过：默认状态 chatWidth style、timeline root/style/marker 和 export UI root 均为单实例；关闭 `gvM365ChatWidthEnabled` / `gvM365TimelineEnabled` 后 chatWidth 与 timeline UI 清理，export UI root 保留；设置 `gvM365ChatWidthPercent: 88` 后 CSS 包含 `88vw`；恢复默认 `75` / `flow` 后状态正常。
 - M365 timeline scroll mode 真机验证通过：`gvM365TimelineScrollMode: "jump"` 时点击 marker 调用 `scrollIntoView({ block: "start", behavior: "auto" })`，`flow` 时调用 `behavior: "smooth"`，目标元素为对应 M365 user message source element。
@@ -435,6 +437,7 @@ git diff --check
 - 2026-04-30 已接入 M365-only popup settings：默认开启，读取 `gvM365ChatWidthEnabled` / `gvM365ChatWidthPercent`，支持开关和宽度滑杆实时生效；仍不修改 M365 消息提取、JSON/Markdown export UI 或 Gemini chatWidth。
 - 2026-04-29 自动化验证通过：M365 4 个 test files、40 个 tests 全部通过；`typecheck`、M365 eslint、Prettier check、`build:chrome`、`git diff --check` 通过。`build:chrome` 在沙箱内遇到已知 `esbuild spawn EPERM`，提升到真实 Windows 环境后重跑通过。
 - 2026-04-29 CDP smoke test：新 Edge profile 加载 `L:\project\dist_chrome` 打开 M365 chat 后，确认 `#gv-m365-chat-width-style` 数量为 1、HTML marker 存在、style 包含 M365 selectors 且不含 Gemini selectors、右上角 export UI root 仍存在。用户随后反馈加宽未生效；CDP 检查确认外层 `chatMessageContainer...` 仍有约 `852px` max-width，修正后用最新 `dist_chrome` 打开 fresh Edge 验证：message container 为 `1440px`，assistant article 为 `1436px`，assistant content 为 `1388px`，user content 为 `1368px`。输入框可用、顶部栏/侧边栏/菜单未破坏仍需用户在真实对话页人工确认。
+- 2026-05-01 真机硬化验证：conversation 页和 new chat 页均通过；ChatWidth style/marker 单实例，80vw/88vw/关闭/恢复实时生效，无横向溢出，Export UI 与 timeline 不受影响；new chat 页输入框未被 ChatWidth selector 错误放宽。
 
 ## 2026-04-29 M365 rich content sample validation
 

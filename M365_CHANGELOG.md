@@ -1,7 +1,7 @@
 # M365 Copilot 变更与进度文档
 
-最后更新：2026-04-30
-当前状态：M365 canonical baseline、export adapter baseline、JSON / Markdown Export 弹窗、M365 chatWidth MVP、M365 timeline MVP、M365 settings UI MVP 和 rich content extraction 补强已落地，diagnostics 已改为手动 gate
+最后更新：2026-05-01
+当前状态：M365 canonical baseline、export adapter baseline、JSON / Markdown Export 弹窗、M365 chatWidth MVP、M365 timeline MVP、M365 settings UI MVP 和 rich content extraction 补强已落地，ChatWidth 已通过 conversation + new chat 真机硬化验证，diagnostics 已改为手动 gate
 配套上下文：`M365_COPILOT_CONTEXT.md`
 
 后续 Codex 会话开始修改 M365 相关代码前，必须先阅读本文件和 `M365_COPILOT_CONTEXT.md`。任何改变 M365 selectors、canonical model、extractor 输出、export adapter、安全策略、浏览器验证流程或迁移优先级的任务，都必须同时更新这两个文档。
@@ -32,13 +32,14 @@
 当前交接状态：
 
 - 项目路径是 `L:\project`；后续 Codex 开始前必须先读 `M365_COPILOT_CONTEXT.md`、`M365_CHANGELOG.md`、`AGENTS.md`、`CLAUDE.md`。
-- 当前本地最新提交是 `e90f577 fix(m365): keep timeline off native scrollbar`。
-- 当前本地 `m365-probe` 领先 `origin/m365-probe` 1 个提交；远端目前停在 `2fb4617 fix(m365): avoid timeline tooltip export overlap`。
+- 本轮开始前本地最新提交是 `fec078b docs(m365): record handoff snapshot`。
+- 本轮开始前本地 `m365-probe` 领先 `origin/m365-probe` 2 个提交；远端目前停在 `2fb4617 fix(m365): avoid timeline tooltip export overlap`。
 - 当前有一个无关 staged 文件 `.agents/skills/safari-release/SKILL.md`，不能误提交；提交 M365 变更时必须继续使用显式 pathspec。
 - 如果后续需要同步 GitHub，只 push `m365-probe`，不要碰 `main`。
 
 最近关键提交：
 
+- `fec078b docs(m365): record handoff snapshot`
 - `e90f577 fix(m365): keep timeline off native scrollbar`
 - `2fb4617 fix(m365): avoid timeline tooltip export overlap`
 - `9edac4c feat(m365): refine export and timeline ui`
@@ -391,7 +392,42 @@ Plan 内容：
 - 这次只修复 timeline 与原生滚动条的视觉/交互冲突；不实现 `gvM365TimelinePosition` 拖拽定位。
 - PDF/Image export 和真实 image-message 样本仍然 pending，不能记录为真机通过。
 
+### 14. M365 chatWidth conversation + new chat 真机硬化验证
+
+目标是先在真实 M365 页面验证 ChatWidth，而不是预防性改 CSS。覆盖已有 conversation 页和新聊天页，确认消息区放宽、输入框不被误伤、Export UI/timeline 共存、storage 开关实时生效。
+
+已完成：
+
+- 重建 `L:\project\dist_chrome`，并用专用 Edge profile + CDP `9225` 加载真实 M365 页面。
+- conversation 页验证通过：`#gv-m365-chat-width-style` 为 1，HTML root 含 `gv-m365-chat-width-enabled`；80vw message container 约 `1530px`，88vw 时约 `1604px`，没有退回旧 `852px` 限制。
+- conversation 页兼容检查通过：无横向溢出，Export UI root/style、timeline root/style、timeline marker 均保持单实例，diagnostics marker 为 0。
+- storage 实时切换通过：关闭 `gvM365ChatWidthEnabled` 会移除 style 和 HTML marker；重新开启并设置 `gvM365ChatWidthPercent: 88` 会注入 `88vw` CSS；最后恢复本轮开始前的 `80`。
+- new chat 页验证通过：没有 message container / article / content nodes，输入框保持约 `752px`，ChatWidth 关闭、88vw、恢复都不会错误放宽输入框或造成横向溢出。
+- Console 只观察到 M365 原生 CSP warning 和 profile photo 404，未观察到 Voyager/M365 ChatWidth 相关 exception。
+
+当前限制：
+
+- 本轮没有改代码，因为实测没有发现需要修复的 ChatWidth CSS 问题。
+- 本轮不实现 `gvM365TimelinePosition`，不修改 timeline/export 行为，不接 PDF/Image。
+
 ## 验证记录
+
+2026-05-01 M365 chatWidth 硬化验证后通过：
+
+```powershell
+npm.cmd run build:chrome
+npm.cmd exec -- prettier --check M365_COPILOT_CONTEXT.md M365_CHANGELOG.md
+git diff --check
+```
+
+验证结果：
+
+- `build:chrome` 在 sandbox 内首次遇到已知 `esbuild spawn EPERM`，随后在真实 Windows 权限下重跑同一命令通过；Vite 仅输出既有 dynamic import、重复 icon asset 和大 chunk warnings。
+- conversation 页：`Voyager` isolated world helpers 和 `chrome.storage.sync` 存在；ChatWidth style/root 单实例，80vw message container 约 `1530px`，88vw 时约 `1604px`，关闭/恢复实时生效，无横向溢出。
+- conversation 页：Export UI root/style 为 1，timeline root/style 为 1，timeline marker 为 2，diagnostics marker 为 0；输入框、顶部栏、侧边栏和右侧轨道均有可见 geometry。
+- new chat 页：ChatWidth style/root 单实例，message container/article/content 均为 0，输入框约 `752px`；关闭/88vw/恢复不会错误放宽输入框，无横向溢出。
+- Console 采样只记录 M365 原生 CSP warning 和 profile photo 404；未记录 Voyager/M365 ChatWidth exception。
+- 因未改 `.ts` / `.tsx`，本轮不跑 targeted Vitest/typecheck/eslint；只做文档格式与 whitespace 检查。
 
 2026-04-30 M365 timeline 右侧滚动条避让修复后通过：
 
@@ -652,7 +688,7 @@ git diff --check
 2. 只读验证 export adapter 在更多 conversation 上的 turns 输出，不接 UI。
 3. 在更多真实 M365 conversations 上继续验证复杂 rich Markdown fidelity，尤其是嵌套列表、复杂表格和混合格式。
 4. 在更多真实 M365 conversations 中验证 timeline marker 可见性、tooltip 与 click-to-scroll；如后续增加滚动同步，也只能基于 `CanonicalMessage.sourceElement`。
-5. 继续验证并收紧 M365 chatWidth MVP，只处理 CSS/layout；如果需要锚点，只使用 canonical source elements。
+5. 在更多屏幕尺寸下观察 M365 chatWidth；如发现问题，只处理 CSS/layout，并且只使用 M365-only selector 或必要的 canonical source elements。
 6. 在准备生产发布前，重新评估是否删除 `m365Diagnostics.ts`，或继续保持手动 gate。
 
 ## 给下一位 Codex 的提醒
