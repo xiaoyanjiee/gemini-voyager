@@ -1,5 +1,4 @@
 import { StorageKeys } from '@/core/types/common';
-import { isSafari } from '@/core/utils/browser';
 import {
   hasValidExtensionContext,
   isExtensionContextInvalidatedError,
@@ -218,10 +217,7 @@ async function initializeFeatures(): Promise<void> {
 
       // Watermark remover - based on gemini-watermark-remover by journey-ad
       // https://github.com/journey-ad/gemini-watermark-remover
-      // Skip on Safari due to fetch interceptor limitations in extension sandbox
-      if (!isSafari()) {
-        startWatermarkRemover();
-      }
+      startWatermarkRemover();
       await delay(LIGHT_FEATURE_INIT_DELAY);
 
       startTitleUpdater();

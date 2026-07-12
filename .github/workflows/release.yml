@@ -230,14 +230,6 @@ jobs:
 
           - **Chrome**: \`voyager-chrome-${TAG}.zip\`
           - **Firefox**: \`voyager-firefox-${TAG}.xpi\`
-          - **Safari**: \`voyager-${TAG}.dmg\`
-
-          ### 🍎 Safari 安装与限制 (Safari Installation & Limitations)
-
-          - **安装 (Installation)**: 下载并打开 \`voyager-${TAG}.dmg\`，按提示安装应用。
-            Download and open \`voyager-${TAG}.dmg\`, then follow the prompts to install the app.
-          - **限制 (Limitations)**: 受限于 Safari 特性，以下功能暂不支持：(a) Nano Banana 水印去除 (b) 图片导出 (建议使用 PDF 导出) (c) Google Drive 云同步。
-            Due to Safari's nature, the following features are not supported: (a) Watermark removal (b) Image export (PDF recommended) (c) Cloud sync with Google Drive.
           EOF
 
             # Combine: auto-generated notes first, then installation
@@ -258,5 +250,4 @@ jobs:
           files: |
             voyager-chrome-*.zip
             voyager-firefox-*.xpi
-            voyager-*.dmg
           body: ${{ steps.release_body.outputs.body }}

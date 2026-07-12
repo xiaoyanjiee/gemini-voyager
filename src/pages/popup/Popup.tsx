@@ -9,11 +9,9 @@ import {
 } from '@/core/services/AccountIsolationService';
 import { StorageKeys } from '@/core/types/common';
 import type { ConversationReference, Folder } from '@/core/types/folder';
-import { getModifierKey, isSafari, shouldShowSafariUpdateReminder } from '@/core/utils/browser';
-import { shouldShowUpdateReminderForCurrentVersion } from '@/core/utils/updateReminder';
+import { getModifierKey } from '@/core/utils/browser';
 import { compareVersions } from '@/core/utils/version';
 import {
-  extractDmgDownloadUrl,
   extractLatestReleaseVersion,
   getCachedLatestVersion,
   getManifestUpdateUrl,
@@ -302,7 +300,6 @@ const normalizeSidebarPx = (value: number) => {
 
 const LATEST_VERSION_CACHE_KEY = 'gvLatestVersionCache';
 const LATEST_VERSION_MAX_AGE = 1000 * 60 * 60 * 6; // 6 hours
-const SAFARI_DMG_RETRY_AGE = 1000 * 60 * 30; // 30 min — re-check for DMG if missing
 
 const normalizeVersionString = (version?: string | null): string | null => {
   if (!version) return null;
@@ -439,7 +436,6 @@ export default function Popup() {
   >('latex');
   const [extVersion, setExtVersion] = useState<string | null>(null);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
-  const [safariDmgUrl, setSafariDmgUrl] = useState<string | null>(null);
   const [watermarkRemoverEnabled, setWatermarkRemoverEnabled] = useState<boolean>(true);
   const [hidePromptManager, setHidePromptManager] = useState<boolean>(false);
   const [inputCollapseEnabled, setInputCollapseEnabled] = useState<boolean>(false);
@@ -772,14 +768,7 @@ export default function Popup() {
       // and prevent confusing "new version" prompts when GitHub is ahead of the store.
       const manifest = chrome?.runtime?.getManifest?.();
 
-      // For Safari: only skip update check if the feature is disabled (default)
-      // If shouldShowSafariUpdateReminder() returns true, allow update checks
-      if (isSafari() && !shouldShowSafariUpdateReminder()) {
-        return;
-      }
-
-      // For other browsers: skip if they have update_url (store installation)
-      if (!isSafari() && getManifestUpdateUrl(manifest)) {
+      if (getManifestUpdateUrl(manifest)) {
         return;
       }
 
@@ -789,32 +778,6 @@ export default function Popup() {
 
         const cachedEntry = cache?.[LATEST_VERSION_CACHE_KEY];
         let latest = getCachedLatestVersion(cachedEntry, now, LATEST_VERSION_MAX_AGE);
-        let dmgUrl: string | null = null;
-
-        if (latest && isSafari()) {
-          // Try to read cached DMG URL
-          if (
-            typeof cachedEntry === 'object' &&
-            cachedEntry !== null &&
-            'dmgUrl' in cachedEntry &&
-            typeof (cachedEntry as Record<string, unknown>).dmgUrl === 'string'
-          ) {
-            dmgUrl = (cachedEntry as Record<string, unknown>).dmgUrl as string;
-          }
-          // If DMG URL was not cached, re-fetch — but respect a 30 min cooldown
-          // to avoid hitting GitHub API rate limits
-          if (
-            !dmgUrl &&
-            typeof cachedEntry === 'object' &&
-            cachedEntry !== null &&
-            'fetchedAt' in cachedEntry &&
-            typeof (cachedEntry as Record<string, unknown>).fetchedAt === 'number' &&
-            now - ((cachedEntry as Record<string, unknown>).fetchedAt as number) >=
-              SAFARI_DMG_RETRY_AGE
-          ) {
-            latest = null;
-          }
-        }
 
         if (!latest) {
           const resp = await fetch(
@@ -833,15 +796,10 @@ export default function Popup() {
 
           if (candidate) {
             latest = candidate;
-            const isSafariFetch = isSafari();
-            if (isSafariFetch) {
-              dmgUrl = extractDmgDownloadUrl(data);
-            }
             await browser.storage.local.set({
               [LATEST_VERSION_CACHE_KEY]: {
                 version: candidate,
                 fetchedAt: now,
-                ...(isSafariFetch ? { dmgUrl } : {}),
               },
             });
           }
@@ -850,9 +808,6 @@ export default function Popup() {
         if (cancelled || !latest) return;
 
         setLatestVersion(latest);
-        if (isSafari()) {
-          setSafariDmgUrl(dmgUrl);
-        }
       } catch (error) {
         if (!cancelled) {
           console.warn('[Gemini Voyager] Failed to check latest version:', error);
@@ -1219,15 +1174,8 @@ export default function Popup() {
 
   const normalizedCurrentVersion = normalizeVersionString(extVersion);
   const normalizedLatestVersion = normalizeVersionString(latestVersion);
-  const isSafariBrowser = isSafari();
-  const safariUpdateReminderEnabled = isSafariBrowser && shouldShowSafariUpdateReminder();
-  const shouldShowUpdateNotification = shouldShowUpdateReminderForCurrentVersion({
-    currentVersion: normalizedCurrentVersion,
-    isSafariBrowser,
-    safariReminderEnabled: safariUpdateReminderEnabled,
-  });
   const hasUpdate =
-    shouldShowUpdateNotification && normalizedCurrentVersion && normalizedLatestVersion
+    normalizedCurrentVersion && normalizedLatestVersion
       ? compareVersions(normalizedLatestVersion, normalizedCurrentVersion) > 0
       : false;
   const latestReleaseTag = toReleaseTag(latestVersion ?? normalizedLatestVersion ?? undefined);
@@ -1247,7 +1195,7 @@ export default function Popup() {
     switch (id) {
       case 'cloudSync':
       case 'nanobanana':
-        return !isSafariBrowser;
+        return true;
       case 'folderTreeIndent':
       case 'sidebarBehavior':
       case 'visualEffect':
@@ -1462,31 +1410,14 @@ export default function Popup() {
                   {t('latestVersionLabel')}: v{normalizedLatestVersion}
                 </p>
               </div>
-              {isSafariBrowser ? (
-                safariDmgUrl ? (
-                  <a
-                    href={safariDmgUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0 rounded-md bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-200"
-                  >
-                    {t('updateNow')}
-                  </a>
-                ) : (
-                  <span className="shrink-0 text-xs leading-tight text-amber-700">
-                    {t('safariUpdateNotSynced')}
-                  </span>
-                )
-              ) : (
-                <a
-                  href={latestReleaseUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="shrink-0 rounded-md bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-200"
-                >
-                  {t('updateNow')}
-                </a>
-              )}
+              <a
+                href={latestReleaseUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 rounded-md bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-200"
+              >
+                {t('updateNow')}
+              </a>
             </div>
           </Card>
         )}
@@ -1520,7 +1451,7 @@ export default function Popup() {
           </Card>
         )}
         {/* Cloud Sync */}
-        {!isSafariBrowser && wrapSection('cloudSync', <CloudSyncSettings />)}
+        {wrapSection('cloudSync', <CloudSyncSettings />)}
         {/* Context Sync */}
         {wrapSection('contextSync', <ContextSyncSettings />)}
         {/* Timeline Options */}
@@ -2487,37 +2418,35 @@ export default function Popup() {
           </Card>,
         )}
 
-        {/* NanoBanana Options - Hidden on Safari due to fetch interceptor limitations */}
-        {!isSafariBrowser &&
-          wrapSection(
-            'nanobanana',
-            <Card className="p-4 transition-all hover:shadow-md">
-              <CardTitle className="mb-4">{t('nanobananaOptions')}</CardTitle>
-              <CardContent className="space-y-4 p-0">
-                <div className="group flex items-center justify-between">
-                  <div className="flex-1">
-                    <Label
-                      htmlFor="watermark-remover"
-                      className="group-hover:text-primary cursor-pointer text-sm font-medium transition-colors"
-                    >
-                      {t('enableNanobananaWatermarkRemover')}
-                    </Label>
-                    <p className="text-muted-foreground mt-1 text-xs">
-                      {t('nanobananaWatermarkRemoverHint')}
-                    </p>
-                  </div>
-                  <Switch
-                    id="watermark-remover"
-                    checked={watermarkRemoverEnabled}
-                    onChange={(e) => {
-                      setWatermarkRemoverEnabled(e.target.checked);
-                      apply({ watermarkRemoverEnabled: e.target.checked });
-                    }}
-                  />
+        {wrapSection(
+          'nanobanana',
+          <Card className="p-4 transition-all hover:shadow-md">
+            <CardTitle className="mb-4">{t('nanobananaOptions')}</CardTitle>
+            <CardContent className="space-y-4 p-0">
+              <div className="group flex items-center justify-between">
+                <div className="flex-1">
+                  <Label
+                    htmlFor="watermark-remover"
+                    className="group-hover:text-primary cursor-pointer text-sm font-medium transition-colors"
+                  >
+                    {t('enableNanobananaWatermarkRemover')}
+                  </Label>
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    {t('nanobananaWatermarkRemoverHint')}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>,
-          )}
+                <Switch
+                  id="watermark-remover"
+                  checked={watermarkRemoverEnabled}
+                  onChange={(e) => {
+                    setWatermarkRemoverEnabled(e.target.checked);
+                    apply({ watermarkRemoverEnabled: e.target.checked });
+                  }}
+                />
+              </div>
+            </CardContent>
+          </Card>,
+        )}
       </div>
 
       {/* Footer */}
