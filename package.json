@@ -21,7 +21,7 @@
     "dev:firefox": "nodemon --config nodemon.firefox.json",
     "test": "vitest run",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage --pool=threads --maxWorkers=2",
     "test:watch": "vitest watch",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",

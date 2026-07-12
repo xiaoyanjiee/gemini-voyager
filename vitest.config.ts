@@ -8,8 +8,14 @@ export default defineConfig({
     setupFiles: ['./src/tests/setup.ts'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reporter: ['text', 'json', 'json-summary', 'html'],
       exclude: ['node_modules/', 'src/tests/', '**/*.d.ts', '**/*.config.*', '**/mockData.ts'],
+      thresholds: {
+        statements: 38,
+        branches: 32,
+        functions: 43,
+        lines: 40,
+      },
     },
   },
   resolve: {
