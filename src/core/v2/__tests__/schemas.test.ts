@@ -19,6 +19,7 @@ describe('V2 schemas', () => {
       ConversationRecordSchema.parse({
         id: 'conversation-1',
         platform: 'm365',
+        accountScope: 'm365:test',
         title: 'Unsafe',
         url: 'javascript:alert(1)',
         folderId: null,
@@ -32,6 +33,7 @@ describe('V2 schemas', () => {
     const base = {
       id: 'conversation-1',
       platform: 'm365' as const,
+      accountScope: 'm365:test',
       title: 'Safe',
       folderId: null,
       createdAt: 1,

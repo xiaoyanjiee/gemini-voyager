@@ -52,6 +52,7 @@ export type SettingsV2 = z.infer<typeof SettingsV2Schema>;
 
 const TimestampSchema = z.number().int().nonnegative();
 const EntityIdSchema = z.string().trim().min(1).max(160);
+const AccountScopeSchema = z.string().trim().min(1).max(500);
 const SafeWebUrlSchema = z
   .string()
   .trim()
@@ -70,6 +71,7 @@ const SafeWebUrlSchema = z
 export const FolderRecordSchema = z.object({
   id: EntityIdSchema,
   platform: PlatformIdSchema,
+  accountScope: AccountScopeSchema,
   name: z.string().trim().min(1).max(160),
   parentId: EntityIdSchema.nullable(),
   sortIndex: z.number().int(),
@@ -81,6 +83,7 @@ export const FolderRecordSchema = z.object({
 export const ConversationRecordSchema = z.object({
   id: EntityIdSchema,
   platform: PlatformIdSchema,
+  accountScope: AccountScopeSchema,
   title: z.string().trim().max(500),
   url: SafeWebUrlSchema,
   folderId: EntityIdSchema.nullable(),
@@ -92,6 +95,7 @@ export const ConversationRecordSchema = z.object({
 
 export const PromptRecordSchema = z.object({
   id: EntityIdSchema,
+  accountScope: AccountScopeSchema,
   title: z.string().trim().max(200),
   text: z.string().max(100_000),
   tags: z.array(z.string().trim().min(1).max(64)).max(50),
@@ -103,6 +107,7 @@ export const PromptRecordSchema = z.object({
 export const StarredRecordSchema = z.object({
   id: EntityIdSchema,
   platform: PlatformIdSchema,
+  accountScope: AccountScopeSchema,
   conversationId: EntityIdSchema,
   messageId: EntityIdSchema,
   summary: z.string().max(1000),
