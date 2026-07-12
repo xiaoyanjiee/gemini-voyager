@@ -11,6 +11,7 @@ import { getStorageMonitor } from '@/core/services/StorageMonitor';
 import { StorageKeys } from '@/core/types/common';
 import type { PromptItem, SyncAccountScope } from '@/core/types/sync';
 import { isSafari } from '@/core/utils/browser';
+import { safeParseFolderData } from '@/features/folder/services/folderDataValidation';
 import { createTranslator, initI18n } from '@/utils/i18n';
 
 import type { ConversationReference, DragData, Folder, FolderData } from './types';
@@ -1844,7 +1845,12 @@ export class AIStudioFolderManager {
           border: 2px solid transparent;
         `;
         const iconName = isSubfolder ? 'subdirectory_arrow_right' : 'folder';
-        folderItem.innerHTML = `<span class="google-symbols" style="font-size: 16px; color: #8ab4f8;">${iconName}</span>${folder.name}`;
+        const folderIcon = this.createIcon(iconName);
+        folderIcon.style.fontSize = '16px';
+        folderIcon.style.color = '#8ab4f8';
+        const folderLabel = document.createElement('span');
+        folderLabel.textContent = folder.name;
+        folderItem.append(folderIcon, folderLabel);
 
         // Bind drop events
         folderItem.addEventListener('dragenter', (e) => {
@@ -2024,11 +2030,12 @@ export class AIStudioFolderManager {
         try {
           const text = await f.text();
           const json = JSON.parse(text);
-          const next = (json && (json.data || json)) as FolderData;
-          if (!next || !Array.isArray(next.folders) || typeof next.folderContents !== 'object') {
+          const parsed = safeParseFolderData(json && (json.data || json));
+          if (!parsed.success) {
             alert(this.t('folder_import_invalid_format') || 'Invalid file format');
             return;
           }
+          const next = parsed.data;
           // Merge mode by default: simple union without duplicates
           const existingIds = new Set(this.data.folders.map((x) => x.id));
           for (const f of next.folders) {
@@ -2172,8 +2179,8 @@ export class AIStudioFolderManager {
   private showNotification(message: string, level: 'info' | 'warning' | 'error' = 'error'): void {
     try {
       const notification = document.createElement('div');
-      notification.className = `gv - notification gv - notification - ${level} `;
-      notification.textContent = `[Gemini Voyager] ${message} `;
+      notification.className = `gv-notification gv-notification-${level}`;
+      notification.textContent = `[Gemini Voyager] ${message}`;
 
       // Color based on level
       const colors = {

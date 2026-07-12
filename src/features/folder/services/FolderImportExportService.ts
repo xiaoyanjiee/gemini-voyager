@@ -22,6 +22,7 @@ import {
   type ValidationError,
   ValidationErrorType,
 } from '../types/import-export';
+import { safeParseFolderData } from './folderDataValidation';
 
 const EXPORT_FORMAT: FormatVersion = 'gemini-voyager.folders.v1' as const;
 
@@ -105,70 +106,21 @@ export class FolderImportExportService {
 
     const data = p.data as Record<string, unknown>;
 
-    // Validate folders array
-    if (!Array.isArray(data.folders)) {
+    const parsedData = safeParseFolderData(data);
+    if (!parsedData.success) {
       return {
         success: false,
         error: {
           type: ValidationErrorType.CORRUPTED_DATA,
-          message: 'Invalid "folders" field: expected an array',
-          details: data.folders,
+          message: 'Folder data failed schema validation',
+          details: parsedData.error.issues,
         },
       };
-    }
-
-    // Validate folderContents object
-    if (!data.folderContents || typeof data.folderContents !== 'object') {
-      return {
-        success: false,
-        error: {
-          type: ValidationErrorType.CORRUPTED_DATA,
-          message: 'Invalid "folderContents" field: expected an object',
-          details: data.folderContents,
-        },
-      };
-    }
-
-    // Basic structure validation for folders
-    for (const folder of data.folders) {
-      if (!folder || typeof folder !== 'object') {
-        return {
-          success: false,
-          error: {
-            type: ValidationErrorType.CORRUPTED_DATA,
-            message: 'Invalid folder object',
-            details: folder,
-          },
-        };
-      }
-
-      const f = folder as Record<string, unknown>;
-      if (!f.id || typeof f.id !== 'string') {
-        return {
-          success: false,
-          error: {
-            type: ValidationErrorType.CORRUPTED_DATA,
-            message: 'Folder missing valid "id" field',
-            details: folder,
-          },
-        };
-      }
-
-      if (!f.name || typeof f.name !== 'string') {
-        return {
-          success: false,
-          error: {
-            type: ValidationErrorType.CORRUPTED_DATA,
-            message: 'Folder missing valid "name" field',
-            details: folder,
-          },
-        };
-      }
     }
 
     return {
       success: true,
-      data: payload as FolderExportPayload,
+      data: { ...(payload as FolderExportPayload), data: parsedData.data },
     };
   }
 
@@ -390,6 +342,12 @@ export class FolderImportExportService {
    */
   static async readJSONFile(file: File): Promise<Result<unknown>> {
     try {
+      if (file.size > 10 * 1024 * 1024) {
+        return {
+          success: false,
+          error: new AppError(ErrorCode.VALIDATION_ERROR, 'Import file exceeds 10 MB'),
+        };
+      }
       const text = await file.text();
       const parsed = JSON.parse(text);
       return {
