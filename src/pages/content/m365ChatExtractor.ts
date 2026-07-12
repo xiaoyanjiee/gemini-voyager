@@ -1,3 +1,5 @@
+import { captureM365Conversation } from '@/platforms/m365/conversation/snapshotAdapter';
+
 import { CanonicalConversationBuilder } from './m365CanonicalConversation';
 import { M365ConversationExtractor } from './m365ConversationExtractor';
 import type { CanonicalConversation, M365ContentItem } from './m365ConversationTypes';
@@ -43,6 +45,10 @@ interface M365MarkdownDebugExportResult {
 export function extractM365CanonicalConversation(): CanonicalConversation {
   const rawConversation = M365ConversationExtractor.extract();
   return CanonicalConversationBuilder.build(rawConversation);
+}
+
+export function extractM365ConversationCapture() {
+  return captureM365Conversation(extractM365CanonicalConversation());
 }
 
 function toLegacyExtractResult(conversation: CanonicalConversation): ExtractResult {
