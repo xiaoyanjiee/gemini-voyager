@@ -5,8 +5,28 @@ import { startM365ChatWidth, stopM365ChatWidth } from './m365ChatWidth';
 
 const STYLE_ID = 'gv-m365-chat-width-style';
 const ENABLED_CLASS = 'gv-m365-chat-width-enabled';
-const ENABLED_KEY = 'gvM365ChatWidthEnabled';
-const WIDTH_KEY = 'gvM365ChatWidthPercent';
+const SETTINGS_KEY = 'gvSettingsV2';
+
+function settings(enabled = true, chatWidthPercent = 75) {
+  const platform = {
+    enabled,
+    chatWidthPercent,
+    inputCollapseEnabled: false,
+    timeline: {
+      enabled: true,
+      scrollMode: 'flow',
+      showUserMessages: true,
+      showAssistantMessages: false,
+    },
+  };
+  return {
+    schemaVersion: 2,
+    activeCloudProvider: null,
+    language: 'en',
+    theme: 'system',
+    platforms: { m365: platform, gemini: platform, aistudio: platform, custom: platform },
+  };
+}
 
 function getStyleText(): string {
   const style = document.getElementById(STYLE_ID);
@@ -26,8 +46,8 @@ describe('M365 chat width', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getSyncGetMock().mockImplementation(
-      (defaults: Record<string, unknown>, callback?: (res: Record<string, unknown>) => void) => {
-        callback?.(defaults);
+      (_key: string, callback?: (res: Record<string, unknown>) => void) => {
+        callback?.({ [SETTINGS_KEY]: settings() });
       },
     );
   });
@@ -61,7 +81,7 @@ describe('M365 chat width', () => {
   it('respects stored disabled state', () => {
     getSyncGetMock().mockImplementation(
       (_defaults: Record<string, unknown>, callback?: (res: Record<string, unknown>) => void) => {
-        callback?.({ [ENABLED_KEY]: false, [WIDTH_KEY]: 75 });
+        callback?.({ [SETTINGS_KEY]: settings(false) });
       },
     );
 
@@ -74,7 +94,7 @@ describe('M365 chat width', () => {
   it('applies and clamps stored width percent', () => {
     getSyncGetMock().mockImplementation(
       (_defaults: Record<string, unknown>, callback?: (res: Record<string, unknown>) => void) => {
-        callback?.({ [ENABLED_KEY]: true, [WIDTH_KEY]: 200 });
+        callback?.({ [SETTINGS_KEY]: settings(true, 100) });
       },
     );
 
@@ -90,9 +110,9 @@ describe('M365 chat width', () => {
 
     listener(
       {
-        [WIDTH_KEY]: {
-          oldValue: 75,
-          newValue: 60,
+        [SETTINGS_KEY]: {
+          oldValue: settings(),
+          newValue: settings(true, 60),
         },
       },
       'sync',
@@ -101,9 +121,9 @@ describe('M365 chat width', () => {
 
     listener(
       {
-        [ENABLED_KEY]: {
-          oldValue: true,
-          newValue: false,
+        [SETTINGS_KEY]: {
+          oldValue: settings(true, 60),
+          newValue: settings(false, 60),
         },
       },
       'sync',

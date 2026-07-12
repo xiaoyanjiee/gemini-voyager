@@ -4,31 +4,20 @@ import { disposableFrom } from '@/core/v2/lifecycle';
 const chatWidthFeature: FeatureModule = {
   id: 'm365.chat-width',
   isEnabled: ({ settings }) => settings.platforms.m365.enabled,
-  async start() {
+  async start(context) {
     const { startM365ChatWidth, stopM365ChatWidth } = await import('@/pages/content/m365ChatWidth');
-    startM365ChatWidth();
+    startM365ChatWidth(context.settings);
     return disposableFrom(stopM365ChatWidth);
   },
 };
 
-const timelineFeature: FeatureModule = {
-  id: 'm365.timeline',
-  isEnabled: ({ settings }) =>
-    settings.platforms.m365.enabled && settings.platforms.m365.timeline.enabled,
-  async start() {
-    const { startM365Timeline, stopM365Timeline } = await import('@/pages/content/m365Timeline');
-    startM365Timeline();
-    return disposableFrom(stopM365Timeline);
-  },
-};
-
-const exportFeature: FeatureModule = {
-  id: 'm365.export',
+const dockFeature: FeatureModule = {
+  id: 'm365.voyager-dock',
   isEnabled: ({ settings }) => settings.platforms.m365.enabled,
   async start() {
-    const { startM365ExportUi, stopM365ExportUi } = await import('@/pages/content/m365ExportUi');
-    startM365ExportUi();
-    return disposableFrom(stopM365ExportUi);
+    const { startVoyagerDock, stopVoyagerDock } = await import('@/platforms/m365/ui/VoyagerDock');
+    await startVoyagerDock();
+    return disposableFrom(stopVoyagerDock);
   },
 };
 
@@ -44,7 +33,7 @@ const developerDiagnosticsFeature: FeatureModule = {
   },
 };
 
-const features = [chatWidthFeature, timelineFeature, exportFeature, developerDiagnosticsFeature];
+const features = [chatWidthFeature, dockFeature, developerDiagnosticsFeature];
 
 export class M365PlatformAdapter implements PlatformAdapter {
   readonly id = 'm365' as const;

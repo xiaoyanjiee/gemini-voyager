@@ -20,11 +20,6 @@ describe('M365PlatformAdapter', () => {
   it('exposes stable feature identifiers', () => {
     const ids = new M365PlatformAdapter().getFeatures().map(({ id }) => id);
 
-    expect(ids).toEqual([
-      'm365.chat-width',
-      'm365.timeline',
-      'm365.export',
-      'm365.developer-diagnostics',
-    ]);
+    expect(ids).toEqual(['m365.chat-width', 'm365.voyager-dock', 'm365.developer-diagnostics']);
   });
 });

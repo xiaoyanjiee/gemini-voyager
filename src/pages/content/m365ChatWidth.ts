@@ -1,9 +1,7 @@
-import {
-  M365_CHAT_WIDTH_ENABLED_KEY,
-  M365_CHAT_WIDTH_PERCENT,
-  M365_CHAT_WIDTH_PERCENT_KEY,
-  clampM365ChatWidthPercent,
-} from './m365Settings';
+import { V2_STORAGE_KEYS } from '@/core/v2/repositories';
+import { type SettingsV2, SettingsV2Schema } from '@/core/v2/schemas';
+
+import { M365_CHAT_WIDTH_PERCENT, clampM365ChatWidthPercent } from './m365Settings';
 
 const M365_CHAT_WIDTH_STYLE_ID = 'gv-m365-chat-width-style';
 const M365_CHAT_WIDTH_ENABLED_CLASS = 'gv-m365-chat-width-enabled';
@@ -84,19 +82,18 @@ function applyM365ChatWidth(): void {
   ensureM365ChatWidthStyle();
 }
 
+function applySettings(settings: SettingsV2): void {
+  currentEnabled = settings.platforms.m365.enabled;
+  currentWidthPercent = clampM365ChatWidthPercent(settings.platforms.m365.chatWidthPercent);
+  applyM365ChatWidth();
+}
+
 function readStoredM365ChatWidthSettings(): void {
   try {
-    chrome.storage?.sync?.get(
-      {
-        [M365_CHAT_WIDTH_ENABLED_KEY]: true,
-        [M365_CHAT_WIDTH_PERCENT_KEY]: M365_CHAT_WIDTH_PERCENT.defaultValue,
-      },
-      (res) => {
-        currentEnabled = res?.[M365_CHAT_WIDTH_ENABLED_KEY] !== false;
-        currentWidthPercent = clampM365ChatWidthPercent(res?.[M365_CHAT_WIDTH_PERCENT_KEY]);
-        applyM365ChatWidth();
-      },
-    );
+    chrome.storage?.sync?.get(V2_STORAGE_KEYS.SETTINGS, (result) => {
+      const parsed = SettingsV2Schema.safeParse(result?.[V2_STORAGE_KEYS.SETTINGS]);
+      if (parsed.success) applySettings(parsed.data);
+    });
   } catch {}
 }
 
@@ -106,19 +103,10 @@ function ensureStorageListener(): void {
   storageListener = (changes, area) => {
     if (area !== 'sync') return;
 
-    if (changes[M365_CHAT_WIDTH_ENABLED_KEY]) {
-      currentEnabled = changes[M365_CHAT_WIDTH_ENABLED_KEY].newValue !== false;
-    }
-
-    if (changes[M365_CHAT_WIDTH_PERCENT_KEY]) {
-      currentWidthPercent = clampM365ChatWidthPercent(
-        changes[M365_CHAT_WIDTH_PERCENT_KEY].newValue,
-      );
-    }
-
-    if (changes[M365_CHAT_WIDTH_ENABLED_KEY] || changes[M365_CHAT_WIDTH_PERCENT_KEY]) {
-      applyM365ChatWidth();
-    }
+    const changed = changes[V2_STORAGE_KEYS.SETTINGS];
+    if (!changed) return;
+    const parsed = SettingsV2Schema.safeParse(changed.newValue);
+    if (parsed.success) applySettings(parsed.data);
   };
 
   chrome.storage?.onChanged?.addListener(storageListener);
@@ -135,7 +123,8 @@ export function stopM365ChatWidth(): void {
   currentWidthPercent = M365_CHAT_WIDTH_PERCENT.defaultValue;
 }
 
-export function startM365ChatWidth(): void {
+export function startM365ChatWidth(initialSettings?: SettingsV2): void {
+  if (initialSettings) applySettings(initialSettings);
   applyM365ChatWidth();
   readStoredM365ChatWidthSettings();
   ensureStorageListener();
