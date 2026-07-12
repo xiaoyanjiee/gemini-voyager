@@ -27,7 +27,13 @@ export type M365PopupStringKey =
   | 'localOnly'
   | 'googleDrive'
   | 'oneDrive'
-  | 'notConfigured';
+  | 'notConfigured'
+  | 'conflictStrategy'
+  | 'mergeRemote'
+  | 'overwriteLocal'
+  | 'replaceRemote'
+  | 'connectApply'
+  | 'syncFailed';
 
 type Dictionary = Record<M365PopupStringKey, string>;
 
@@ -61,6 +67,12 @@ const en: Dictionary = {
   googleDrive: 'Google Drive',
   oneDrive: 'OneDrive',
   notConfigured: 'Not configured',
+  conflictStrategy: 'Conflict strategy',
+  mergeRemote: 'Merge remote',
+  overwriteLocal: 'Overwrite with local',
+  replaceRemote: 'Replace with remote',
+  connectApply: 'Connect and apply',
+  syncFailed: 'Sync failed',
 };
 
 const dictionaries: Record<string, Dictionary> = {
@@ -96,6 +108,12 @@ const dictionaries: Record<string, Dictionary> = {
     googleDrive: 'Google Drive',
     oneDrive: 'OneDrive',
     notConfigured: '未配置',
+    conflictStrategy: '冲突处理',
+    mergeRemote: '合并远端',
+    overwriteLocal: '用本地覆盖',
+    replaceRemote: '用远端替换',
+    connectApply: '连接并应用',
+    syncFailed: '同步失败',
   },
   zh_TW: {
     ...en,
@@ -128,6 +146,12 @@ const dictionaries: Record<string, Dictionary> = {
     googleDrive: 'Google Drive',
     oneDrive: 'OneDrive',
     notConfigured: '未設定',
+    conflictStrategy: '衝突處理',
+    mergeRemote: '合併遠端',
+    overwriteLocal: '以本機覆蓋',
+    replaceRemote: '以遠端取代',
+    connectApply: '連線並套用',
+    syncFailed: '同步失敗',
   },
   ja: {
     ...en,

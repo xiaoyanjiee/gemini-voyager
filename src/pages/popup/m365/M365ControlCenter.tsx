@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 
+import { GoogleDriveProvider } from '@/core/v2/cloud/GoogleDriveProvider';
+import { OneDriveProvider } from '@/core/v2/cloud/OneDriveProvider';
+import { SyncCoordinator } from '@/core/v2/cloud/SyncCoordinator';
+import type { CloudSwitchStrategy } from '@/core/v2/cloud/types';
 import { settingsV2Repository, workspaceV2Repository } from '@/core/v2/repositories';
 import {
   type SettingsV2,
@@ -34,6 +38,12 @@ export default function M365ControlCenter() {
   const [settings, setSettings] = useState<SettingsV2 | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceV2 | null>(null);
   const [status, setStatus] = useState(strings.statusReady);
+  const [pendingCloud, setPendingCloud] = useState<'google-drive' | 'onedrive'>('google-drive');
+  const [switchStrategy, setSwitchStrategy] = useState<CloudSwitchStrategy>('merge');
+  const coordinator = useMemo(
+    () => new SyncCoordinator([new GoogleDriveProvider(), new OneDriveProvider()]),
+    [],
+  );
 
   useEffect(() => {
     void Promise.all([settingsV2Repository.get(), workspaceV2Repository.get()]).then(
@@ -107,25 +117,51 @@ export default function M365ControlCenter() {
       case 'sync':
         return (
           <div className="m365-stack">
+            <p className="m365-muted">
+              {strings.activeCloud}: {settings.activeCloudProvider ?? strings.localOnly}
+            </p>
             <label>
               {strings.activeCloud}
               <select
-                value={settings.activeCloudProvider ?? ''}
+                value={pendingCloud}
                 onChange={(event) =>
-                  void saveSettings((next) => {
-                    next.activeCloudProvider = event.target.value
-                      ? (event.target.value as SettingsV2['activeCloudProvider'])
-                      : null;
-                  })
+                  setPendingCloud(event.target.value as 'google-drive' | 'onedrive')
                 }
               >
-                <option value="">{strings.none}</option>
                 <option value="google-drive">{strings.googleDrive}</option>
                 <option value="onedrive" disabled={!import.meta.env.VITE_ONEDRIVE_CLIENT_ID}>
                   {strings.oneDrive} — {strings.notConfigured}
                 </option>
               </select>
             </label>
+            <label>
+              {strings.conflictStrategy}
+              <select
+                value={switchStrategy}
+                onChange={(event) => setSwitchStrategy(event.target.value as CloudSwitchStrategy)}
+              >
+                <option value="merge">{strings.mergeRemote}</option>
+                <option value="local-overwrite">{strings.overwriteLocal}</option>
+                <option value="remote-replace">{strings.replaceRemote}</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() =>
+                void coordinator
+                  .switchPrimary(pendingCloud, switchStrategy)
+                  .then(async () => {
+                    setSettings(await settingsV2Repository.get());
+                    setWorkspace(await workspaceV2Repository.get());
+                    setStatus(strings.statusReady);
+                  })
+                  .catch((error: unknown) =>
+                    setStatus(error instanceof Error ? error.message : strings.syncFailed),
+                  )
+              }
+            >
+              {strings.connectApply}
+            </button>
           </div>
         );
       case 'appearance':
