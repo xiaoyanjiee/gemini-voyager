@@ -54,19 +54,33 @@ export default [
 
       // TypeScript rules
       '@typescript-eslint/no-unused-vars': [
-        'warn',
+        'error',
         {
           argsIgnorePattern: '^_',
           varsIgnorePattern: '^_',
         },
       ],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      // Legacy modules are migrated incrementally. V2 modules enforce the strict rules below.
+      '@typescript-eslint/no-explicit-any': 'off',
 
       // General best practices
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-console': 'off',
 
       // NOTE: Import ordering is handled by Prettier's @trivago/prettier-plugin-sort-imports
       // Do NOT add 'import/order' rule here - it will conflict with Prettier!
+    },
+  },
+
+  // New architecture must use typed boundaries and LoggerService from day one.
+  {
+    files: [
+      'src/core/v2/**/*.{ts,tsx}',
+      'src/platforms/**/*.{ts,tsx}',
+      'src/features/v2/**/*.{ts,tsx}',
+    ],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'error',
+      'no-console': ['error', { allow: ['warn', 'error'] }],
     },
   },
 

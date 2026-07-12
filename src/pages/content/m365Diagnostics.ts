@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * M365 Copilot DOM Diagnostics -- 临时诊断模块
  *

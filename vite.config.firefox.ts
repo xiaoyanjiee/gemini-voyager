@@ -72,13 +72,6 @@ export default mergeConfig(
         },
       }),
     ],
-    resolve: {
-      alias: {
-        // Firefox uses mermaid v9.2.2 (max compatible version)
-        // Chrome/Safari use mermaid v11.x (latest) by default
-        mermaid: 'mermaid-legacy',
-      },
-    },
     build: {
       ...baseBuildOptions,
       outDir,

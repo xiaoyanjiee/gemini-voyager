@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { CanonicalConversationBuilder } from './m365CanonicalConversation';
 import { M365ConversationExtractor } from './m365ConversationExtractor';
 import type { CanonicalConversation, M365ContentItem } from './m365ConversationTypes';
