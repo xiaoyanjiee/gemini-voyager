@@ -237,22 +237,19 @@ We welcome contributions! Whether you want to report bugs, suggest features, imp
 <summary>Development Setup</summary>
 
 ```bash
-# Install dependencies (Bun recommended)
-bun i
+# Install dependencies
+npm ci
 
 # Development mode (with auto-reload)
-bun run dev:chrome   # Chrome & Chromium browsers
-bun run dev:firefox  # Firefox
-bun run dev:safari   # Safari (requires macOS)
+npm run dev:chrome   # Chrome & Chromium browsers
+npm run dev:firefox  # Firefox
 
 # Production builds
-bun run build:chrome   # Chrome
-bun run build:firefox  # Firefox
-bun run build:safari   # Safari
-bun run build:all      # All browsers
+npm run build:chrome   # Chrome
+npm run build:edge     # Edge
+npm run build:firefox  # Firefox
+npm run build:all      # All supported browsers
 ```
-
-**Safari Development**: See [safari/README.md](safari/README.md) for additional build steps.
 
 </details>
 

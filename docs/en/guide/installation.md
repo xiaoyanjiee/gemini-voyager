@@ -1,9 +1,5 @@
 # Installation
 
-::: info News
-🍎 **Safari Native Extension is launched!** It is completely free and supports one-click installation.
-:::
-
 Choose your path.
 
 > ⚠️ Note: Prompt Manager is the only feature that supports Gemini™ for Enterprise.
@@ -43,19 +39,6 @@ The Web Store review process can be slow. If you want the cutting-edge version i
 3. Drag and drop the `.xpi` file to install (or click the gear icon ⚙️ -> **Install Add-on From File**).
 
 > 💡 The XPI file is officially signed by Mozilla and can be permanently installed in all Firefox versions.
-
-## 3. Safari (macOS)
-
-Safari now supports direct distribution! Download the pre-signed app:
-
-1. Download the <SafariDownloadLink>latest Safari version (.dmg)</SafariDownloadLink>.
-2. Double-click to open and follow the prompts to install.
-3. Double-click to launch the app.
-4. Enable the extension in **Safari Settings > Extensions**.
-
-> 💡 The Safari build is now directly signed for distribution—no Xcode conversion needed!
->
-> ⚠️ **Limitations**: Due to Safari's nature, (a) Watermark removal (b) Image export (PDF recommended) are not supported.
 
 ---
 

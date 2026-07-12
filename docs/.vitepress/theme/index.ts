@@ -7,7 +7,6 @@ import { h } from 'vue';
 import HomeAskAI from './components/HomeAskAI.vue';
 import HomeReviews from './components/HomeReviews.vue';
 import HomeTeaser from './components/HomeTeaser.vue';
-import SafariDownloadLink from './components/SafariDownloadLink.vue';
 import './style.css';
 
 export default {
@@ -23,6 +22,5 @@ export default {
     app.component('HomeReviews', HomeReviews);
     app.component('HomeTeaser', HomeTeaser);
     app.component('HomeAskAI', HomeAskAI);
-    app.component('SafariDownloadLink', SafariDownloadLink);
   },
 } satisfies Theme;

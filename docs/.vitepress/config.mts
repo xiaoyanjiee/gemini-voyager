@@ -4,6 +4,20 @@ import {
 } from '@nolebase/vitepress-plugin-git-changelog/vite';
 import { defineConfig } from 'vitepress';
 
+const v2GuideItems = {
+  root: [
+    { text: 'V2 架构', link: '/guide/v2-architecture' },
+    { text: 'V2 安全', link: '/guide/v2-security' },
+    { text: 'OneDrive V2', link: '/guide/onedrive-v2' },
+    { text: '测试与发布门禁', link: '/guide/testing-v2' },
+  ],
+  en: [
+    { text: 'V2 Architecture', link: '/en/guide/v2-architecture' },
+    { text: 'OneDrive V2', link: '/en/guide/onedrive-v2' },
+    { text: 'Testing Gate', link: '/en/guide/testing-v2' },
+  ],
+} as const;
+
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
   base: '/',
@@ -41,6 +55,7 @@ export default defineConfig({
               { text: '侧边栏宽度', link: '/guide/sidebar' },
             ],
           },
+          { text: 'M365-first V2', items: v2GuideItems.root },
           {
             text: 'Gemini 专属功能',
             items: [
@@ -163,6 +178,7 @@ export default defineConfig({
               { text: 'Sidebar Width', link: '/en/guide/sidebar' },
             ],
           },
+          { text: 'M365-first V2', items: v2GuideItems.en },
           {
             text: 'Gemini Exclusive Features',
             items: [
