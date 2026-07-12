@@ -521,3 +521,11 @@ export function startM365Diagnostics(options: StartM365DiagnosticsOptions = {}):
     (window as unknown as Record<string, unknown>).__gvLastDiagResult = result;
   }, RUN_DELAY_MS);
 }
+
+export function stopM365Diagnostics(): void {
+  clearAllMarkers();
+  const diagnosticsWindow = window as unknown as Record<string, unknown>;
+  delete diagnosticsWindow.__gvDiagRun;
+  delete diagnosticsWindow.__gvDiagClear;
+  delete diagnosticsWindow.__gvLastDiagResult;
+}

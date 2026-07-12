@@ -8,12 +8,6 @@ import { isGeminiEnterpriseEnvironment } from '@/core/utils/gemini';
 import { startFormulaCopy } from '@/features/formulaCopy';
 import { initI18n } from '@/utils/i18n';
 
-import { startM365ChatExtractor } from './m365ChatExtractor';
-import { startM365ChatWidth } from './m365ChatWidth';
-import { startM365Diagnostics } from './m365Diagnostics';
-import { startM365ExportUi } from './m365ExportUi';
-import { startM365Timeline } from './m365Timeline';
-
 import { startChangelog } from './changelog/index';
 import { startChatWidthAdjuster } from './chatWidth/index';
 import { startContextSync } from './contextSync';
@@ -168,19 +162,6 @@ async function initializeFeatures(): Promise<void> {
     if (isEnterprise) {
       console.log('[Gemini Voyager] Gemini Enterprise detected, starting Prompt Manager only');
       promptManagerInstance = await startPromptManager();
-      return;
-    }
-
-    // M365 Copilot: register M365-only helpers/UI; do not start Gemini features.
-    if (location.hostname === 'm365.cloud.microsoft') {
-      console.log(
-        '[Gemini Voyager] M365 Copilot detected, starting manual diagnostics + chat extractor + export UI + chat width + timeline',
-      );
-      startM365Diagnostics();
-      startM365ChatExtractor();
-      startM365ExportUi();
-      startM365ChatWidth();
-      startM365Timeline();
       return;
     }
 
@@ -424,8 +405,7 @@ function handleVisibilityChange(): void {
       hostname.includes('gemini.google.com') ||
       hostname.includes('business.gemini.google') ||
       hostname.includes('aistudio.google.com') ||
-      hostname.includes('aistudio.google.cn') ||
-      hostname.includes('m365.cloud.microsoft');
+      hostname.includes('aistudio.google.cn');
 
     // Initialize KaTeX configuration early to suppress Unicode warnings
     // This must run before any formulas are rendered on the page

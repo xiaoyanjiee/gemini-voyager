@@ -42,6 +42,8 @@ const WINDOWS_RESERVED_FILENAME_PATTERN = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(
 let m365ExportToastTimer: number | null = null;
 let m365ExportUiAction: typeof runM365ExportAction = runM365ExportAction;
 let m365ExportDismissListenersAttached = false;
+let m365ExportOutsideClickHandler: ((event: MouseEvent) => void) | null = null;
+let m365ExportEscapeHandler: ((event: KeyboardEvent) => void) | null = null;
 
 export function sanitizeM365ExportFilenameBase(value: string | null | undefined): string {
   const sanitized = (value ?? '')
@@ -661,6 +663,8 @@ function attachM365ExportDismissHandlers(): void {
 
   document.addEventListener('click', closeOnOutsideClick);
   document.addEventListener('keydown', closeOnEscape);
+  m365ExportOutsideClickHandler = closeOnOutsideClick;
+  m365ExportEscapeHandler = closeOnEscape;
   m365ExportDismissListenersAttached = true;
 }
 
@@ -681,4 +685,24 @@ export function startM365ExportUi(deps: M365ExportUiDeps = {}): void {
   attachM365ExportDismissHandlers();
 
   document.body.appendChild(root);
+}
+
+export function stopM365ExportUi(): void {
+  if (m365ExportToastTimer !== null) {
+    window.clearTimeout(m365ExportToastTimer);
+    m365ExportToastTimer = null;
+  }
+  if (m365ExportOutsideClickHandler) {
+    document.removeEventListener('click', m365ExportOutsideClickHandler);
+    m365ExportOutsideClickHandler = null;
+  }
+  if (m365ExportEscapeHandler) {
+    document.removeEventListener('keydown', m365ExportEscapeHandler);
+    m365ExportEscapeHandler = null;
+  }
+  m365ExportDismissListenersAttached = false;
+  m365ExportUiAction = runM365ExportAction;
+  document.getElementById(M365_EXPORT_UI_ROOT_ID)?.remove();
+  document.getElementById(M365_EXPORT_UI_STYLE_ID)?.remove();
+  document.getElementById(M365_EXPORT_TOAST_ID)?.remove();
 }

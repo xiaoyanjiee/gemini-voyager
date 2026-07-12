@@ -1,0 +1,13 @@
+:root {
+  --gv-m365-font-family: 'Segoe UI', system-ui, sans-serif;
+  --gv-m365-focus-color: #0f6cbd;
+}
+
+[data-gv-m365-ui] {
+  font-family: var(--gv-m365-font-family);
+}
+
+[data-gv-m365-ui] :focus-visible {
+  outline: 2px solid var(--gv-m365-focus-color);
+  outline-offset: 2px;
+}
