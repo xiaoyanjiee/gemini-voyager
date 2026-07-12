@@ -4,8 +4,9 @@
  * Edge doesn't accept the 'key' field in manifest.json
  * This script builds the Chrome extension and removes incompatible fields.
  */
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
+import JSZip from 'jszip';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -18,23 +19,25 @@ const manifestPath = path.join(distDir, 'manifest.json');
 const EDGE_INCOMPATIBLE_FIELDS = ['key'];
 
 async function buildForEdge() {
-  console.log('🔨 Building Chrome extension...');
+  console.log('Building Chrome extension...');
 
   try {
-    execSync('bun run build:chrome', {
+    const npmCli = process.env.npm_execpath;
+    if (!npmCli) throw new Error('npm_execpath is unavailable; run this script through npm');
+    execFileSync(process.execPath, [npmCli, 'run', 'build:chrome'], {
       cwd: rootDir,
       stdio: 'inherit',
     });
   } catch (error) {
-    console.error('❌ Build failed:', error.message);
+    console.error('Build failed:', error.message);
     process.exit(1);
   }
 
-  console.log('\n🔧 Preparing for Edge submission...');
+  console.log('\nPreparing for Edge submission...');
 
   // Read and parse manifest
   if (!fs.existsSync(manifestPath)) {
-    console.error('❌ manifest.json not found in dist_chrome/');
+    console.error('manifest.json not found in dist_chrome/');
     process.exit(1);
   }
 
@@ -56,7 +59,7 @@ async function buildForEdge() {
   // Write back the cleaned manifest
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
 
-  console.log('✅ Edge build ready!');
+  console.log('Edge build ready.');
   console.log(`   Output: ${distDir}/`);
 
   // Zip the output
@@ -66,7 +69,7 @@ async function buildForEdge() {
   const zipName = `voyager-edge-v${version}.zip`;
   const zipPath = path.join(rootDir, zipName);
 
-  console.log(`\n📦 Zipping into ${zipName}...`);
+  console.log(`\nPackaging ${zipName}...`);
 
   try {
     // Remove existing zip if it exists
@@ -74,17 +77,28 @@ async function buildForEdge() {
       fs.unlinkSync(zipPath);
     }
 
-    // Zip the *contents* of dist_chrome
-    execSync(`zip -r "${zipPath}" .`, {
-      cwd: distDir,
-      stdio: 'inherit',
+    const zip = new JSZip();
+    addDirectoryToZip(zip, distDir, '');
+    const archive = await zip.generateAsync({
+      type: 'nodebuffer',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 9 },
     });
-
-    console.log(`✨ Successfully created: ${zipName}`);
+    fs.writeFileSync(zipPath, archive);
+    console.log(`Created: ${zipName}`);
   } catch (error) {
-    console.error('❌ Zipping failed:', error.message);
+    console.error('Packaging failed:', error.message);
     process.exit(1);
   }
 }
 
-buildForEdge();
+function addDirectoryToZip(zip, directory, relativePath) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const absolutePath = path.join(directory, entry.name);
+    const archivePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) addDirectoryToZip(zip, absolutePath, archivePath);
+    else if (entry.isFile()) zip.file(archivePath, fs.readFileSync(absolutePath));
+  }
+}
+
+void buildForEdge();
