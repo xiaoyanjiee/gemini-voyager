@@ -12,3 +12,199 @@ body {
 #__root {
   display: inline-block;
 }
+
+.gv-popup-loading,
+.m365-popup {
+  width: 440px;
+  min-height: 600px;
+  box-sizing: border-box;
+}
+
+.gv-popup-loading {
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #242424;
+}
+
+.m365-popup {
+  display: grid;
+  grid-template-rows: 64px 1fr 34px;
+  background: #fafafa;
+  color: #242424;
+  font:
+    13px/1.4 'Segoe UI',
+    system-ui,
+    sans-serif;
+}
+
+.m365-popup header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fff;
+}
+
+.m365-popup h1 {
+  margin: 0;
+  font-size: 20px;
+}
+.m365-popup header span,
+.m365-muted {
+  color: #616161;
+}
+.m365-layout {
+  display: grid;
+  grid-template-columns: 136px 1fr;
+  min-height: 0;
+}
+.m365-popup nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 8px;
+  border-right: 1px solid #e0e0e0;
+  background: #f5f5f5;
+}
+.m365-popup nav button {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  padding: 9px 10px;
+  text-align: left;
+  cursor: pointer;
+}
+.m365-popup nav button:hover {
+  background: #ebebeb;
+}
+.m365-popup nav button[aria-current='page'] {
+  background: #e5f1fb;
+  color: #0f6cbd;
+  font-weight: 600;
+}
+.m365-popup main {
+  overflow: auto;
+  padding: 18px;
+}
+.m365-popup h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+.m365-stack {
+  display: grid;
+  gap: 14px;
+}
+.m365-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.m365-metric {
+  display: grid;
+  gap: 3px;
+  padding: 14px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+}
+.m365-metric strong {
+  font-size: 20px;
+}
+.m365-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.m365-popup label {
+  display: grid;
+  gap: 7px;
+}
+.m365-popup select,
+.m365-popup input[type='range'] {
+  width: 100%;
+  box-sizing: border-box;
+}
+.m365-popup select {
+  border: 1px solid #b3b3b3;
+  border-radius: 4px;
+  background: #fff;
+  color: inherit;
+  padding: 7px 9px;
+}
+.m365-danger {
+  border: 1px solid #d13438;
+  border-radius: 4px;
+  background: #fff;
+  color: #a4262c;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.m365-popup footer {
+  padding: 7px 18px;
+  border-top: 1px solid #e0e0e0;
+  background: #fff;
+  color: #616161;
+}
+.m365-popup button:focus-visible,
+.m365-popup input:focus-visible,
+.m365-popup select:focus-visible {
+  outline: 2px solid #0f6cbd;
+  outline-offset: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .gv-popup-loading,
+  .m365-popup,
+  .m365-popup header,
+  .m365-popup footer,
+  .m365-metric {
+    background: #242424;
+    color: #fff;
+  }
+  .m365-popup nav {
+    background: #292929;
+  }
+  .m365-popup header,
+  .m365-popup footer,
+  .m365-popup nav,
+  .m365-metric {
+    border-color: #484848;
+  }
+  .m365-popup nav button:hover {
+    background: #333;
+  }
+  .m365-popup nav button[aria-current='page'] {
+    background: #143b5c;
+    color: #fff;
+  }
+  .m365-popup select,
+  .m365-danger {
+    background: #292929;
+    color: #fff;
+    border-color: #666;
+  }
+  .m365-popup header span,
+  .m365-muted,
+  .m365-popup footer {
+    color: #c7c7c7;
+  }
+}
+
+[dir='rtl'] .m365-popup nav {
+  border-right: 0;
+  border-left: 1px solid #e0e0e0;
+}
+[dir='rtl'] .m365-popup nav button {
+  text-align: right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m365-popup * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}

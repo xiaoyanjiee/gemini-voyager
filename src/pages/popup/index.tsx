@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client';
 
-import Popup from '@pages/popup/Popup';
+import PopupRouter from '@pages/popup/PopupRouter';
 import '@pages/popup/index.css';
 
 import '@assets/styles/tailwind.css';
@@ -13,7 +13,7 @@ function init() {
   const root = createRoot(rootContainer);
   root.render(
     <LanguageProvider>
-      <Popup />
+      <PopupRouter />
     </LanguageProvider>,
   );
 }
