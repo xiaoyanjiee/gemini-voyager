@@ -6,7 +6,7 @@ import type { ConversationSnapshot } from '../model';
 
 function snapshot(
   conversationId: string,
-  messages: Array<{ id: string; index: number; text: string }>,
+  messages: Array<{ id: string; index: number; text: string; fingerprint?: string }>,
 ): ConversationSnapshot {
   return {
     schemaVersion: 2,
@@ -16,9 +16,9 @@ function snapshot(
     title: 'Test',
     url: `https://m365.cloud.microsoft/chat/${conversationId}`,
     capturedAt: 100,
-    messages: messages.map(({ id, index, text }) => ({
+    messages: messages.map(({ id, index, text, fingerprint }) => ({
       id,
-      fingerprint: `fp-${id}`,
+      fingerprint: fingerprint ?? `fp-${id}`,
       role: index % 2 === 0 ? 'user' : 'assistant',
       index,
       plainText: text,
@@ -51,6 +51,50 @@ describe('ConversationSession', () => {
     expect(
       session.merge(snapshot('two', [{ id: 'b', index: 0, text: 'new' }])).messages,
     ).toHaveLength(1);
+  });
+
+  it('replaces a streaming message when the same DOM anchor gets a new fingerprint', () => {
+    const session = new ConversationSession();
+    const source = document.createElement('article');
+    const content = document.createElement('div');
+    source.append(content);
+    document.body.append(source);
+
+    const partialIndex = new ConversationDomIndex();
+    partialIndex.set('partial', { source, content });
+    session.merge(
+      snapshot('one', [{ id: 'partial', index: 1, text: 'E', fingerprint: 'assistant-e' }]),
+      partialIndex,
+    );
+
+    const finalIndex = new ConversationDomIndex();
+    finalIndex.set('final', { source, content });
+    const result = session.merge(
+      snapshot('one', [{ id: 'final', index: 1, text: 'E=mc²', fingerprint: 'assistant-e-mc2' }]),
+      finalIndex,
+    );
+
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]).toMatchObject({ id: 'partial', plainText: 'E=mc²' });
+    expect(session.domIndex.get('partial')?.source).toBe(source);
+  });
+
+  it('deduplicates virtualized messages whose window-relative ids changed', () => {
+    const session = new ConversationSession();
+    session.merge(
+      snapshot('one', [
+        { id: 'window-a', index: 0, text: 'same', fingerprint: 'stable-fingerprint' },
+      ]),
+    );
+
+    const result = session.merge(
+      snapshot('one', [
+        { id: 'window-b', index: 4, text: 'same', fingerprint: 'stable-fingerprint' },
+      ]),
+    );
+
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]).toMatchObject({ id: 'window-a', index: 0 });
   });
 
   it('drops disconnected DOM anchors', () => {

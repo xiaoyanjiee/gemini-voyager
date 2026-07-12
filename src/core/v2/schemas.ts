@@ -25,6 +25,7 @@ const PlatformSettingsSchema = z.object({
   enabled: z.boolean().default(true),
   chatWidthPercent: z.number().int().min(30).max(100).default(75),
   inputCollapseEnabled: z.boolean().default(false),
+  dockPosition: z.enum(['left', 'right']).default('right'),
   timeline: TimelineSettingsSchema.default(DEFAULT_TIMELINE_SETTINGS),
 });
 
@@ -32,6 +33,7 @@ const DEFAULT_PLATFORM_SETTINGS = {
   enabled: true,
   chatWidthPercent: 75,
   inputCollapseEnabled: false,
+  dockPosition: 'right' as const,
   timeline: DEFAULT_TIMELINE_SETTINGS,
 };
 

@@ -1,11 +1,25 @@
 # M365 Copilot 迁移架构基线
 
-最后更新：2026-05-01
-状态：M365 adapter 活跃基线，JSON / Markdown export MVP 与 Voyager 风格 M365-only Export 弹窗已接入，M365 chatWidth / timeline MVP 已接入并支持 M365-only popup 设置，chatWidth 已通过 conversation + new chat 真机硬化验证，rich content extraction 已补强
+最后更新：2026-07-12
+状态：Voyager V2 M365 Dock 会话稳定性与管理界面修复已通过第二轮 Chrome 真机回归
 目标站点：`https://m365.cloud.microsoft/*`
 
 这是后续 Codex 会话的交接文档。修改 M365 专用代码前，必须先阅读本文件。
 桌面上的历史 `PLAN.md` / `PLAN2.md` 以及 M365 export adapter 计划已吸收到本文档；新会话不需要再导入这三份 plan。
+
+## 2026-07-12 V2 真机修复快照
+
+- Chrome `Test` 对话首轮真机验证确认：内容脚本、Shadow DOM Dock、发送与回复、提示词插入、引用、公式识别、四种导出、选择导出、聊天宽度及 Dock 开关可运行。
+- 首轮发现流式回复被保存为中间片段和最终片段、虚拟窗口重新编号造成重复消息、MutationObserver 未实时刷新、星标无可见状态、提示词无编辑删除、文件夹使用阻塞式 `window.prompt()`、Appearance 控制不完整。
+- `ConversationSession` 现在优先使用同一 DOM anchor 延续消息身份，并以稳定 fingerprint 处理虚拟窗口 ID 变化；会话输出按持久顺序重新生成唯一 index。
+- `VoyagerDock` 现在观察真实 conversation feed 的 `childList` 与 `characterData`，并定时检查 feed 是否被 M365 替换。
+- 星标按钮显示 `Star` / `Unstar` 和 `aria-pressed`；提示词支持编辑与 tombstone 删除；文件夹创建和子目录创建改为内联表单并提供删除。
+- Appearance 增加左右 Dock 位置、输入区折叠和 system/light/dark 主题；V2 设置新增 `dockPosition`，旧 V2 设置通过 Zod default 兼容读取。
+- 新增 session 流式替换、虚拟窗口去重、提示词删除、内联文件夹、提示词编辑删除和布局设置测试。
+- 本轮不迁移旧 key，不触碰旧云文件，不修改 Gemini/AI Studio 行为；Popup 与 Google Drive / OneDrive 仍需在页面内修复复测后继续验收。
+- 第二轮 Chrome 真机回归通过：刷新后 10 条历史消息无重复；发送唯一测试消息后 Timeline 在不切换页签的情况下实时变为 12 条，序号 1–12 唯一，流式中间片段未残留。
+- 星标可见状态、提示词新增/编辑/删除、两级文件夹创建、归档高亮、移出与删除、左右位置、暗色主题和输入区折叠均真机通过，测试状态已清理或恢复默认。
+- 工作区导出真机返回成功；自动化文件选择器拒绝注入本地 fixture，因此 UI 导入仍需一次人工文件选择确认。服务层的 JSON、大小、Zod、两级目录和账号重绑定已有自动测试。
 
 ## 2026-05-01 交接快照
 

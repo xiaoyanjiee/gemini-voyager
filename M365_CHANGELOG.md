@@ -1,10 +1,43 @@
 # M365 Copilot 变更与进度文档
 
-最后更新：2026-05-01
-当前状态：M365 canonical baseline、export adapter baseline、JSON / Markdown Export 弹窗、M365 chatWidth MVP、M365 timeline MVP、M365 settings UI MVP 和 rich content extraction 补强已落地，ChatWidth 已通过 conversation + new chat 真机硬化验证，diagnostics 已改为手动 gate
+最后更新：2026-07-12
+当前状态：Voyager V2 M365 Dock 首轮真机问题已修复，并通过自动测试、跨浏览器构建与第二轮 Chrome 真机回归
 配套上下文：`M365_COPILOT_CONTEXT.md`
 
 后续 Codex 会话开始修改 M365 相关代码前，必须先阅读本文件和 `M365_COPILOT_CONTEXT.md`。任何改变 M365 selectors、canonical model、extractor 输出、export adapter、安全策略、浏览器验证流程或迁移优先级的任务，都必须同时更新这两个文档。
+
+## 2026-07-12 Voyager V2 首轮真机修复
+
+真实 Chrome `Test` 对话验证先确认了扩展注入、Dock、发送与回复、提示词插入、引用、LaTeX 公式、JSON / Markdown / PDF / Image 导出、选择导出、宽度控制与关闭恢复。随后稳定复现以下问题：
+
+- canonical ID 含窗口相对 index 与全文 fingerprint，流式文本变化会创建新 ID；虚拟窗口变化又会让相同消息获得不同 ID。
+- Dock observer 只监听宽泛根节点的 `childList`，没有覆盖流式 `characterData`，也没有在 M365 替换 feed 后重连。
+- 星标只通过状态栏反馈；提示词没有编辑删除；文件夹创建使用阻塞式原生 prompt；Appearance 只有宽度滑杆。
+
+本轮修复：
+
+- `ConversationSession` 用 DOM anchor 延续流式消息身份，用 fingerprint 合并虚拟窗口中的同一消息，并按持久顺序输出唯一 index。
+- Observer 绑定消息所在 feed/log，监听 `childList + characterData`，每秒检查根节点替换并安全重连。
+- 星标按钮增加 `Star` / `Unstar` 与 `aria-pressed` 状态。
+- `M365WorkspaceService` 增加提示词 tombstone 删除；Dock 增加提示词编辑、取消编辑、删除。
+- 文件夹和子目录创建改为内联表单，增加删除入口，不再调用 `window.prompt()`。
+- V2 设置增加 `dockPosition`；Appearance 增加左右位置、输入区折叠和 system/light/dark 主题，停止功能时清理注入样式与页面 class。
+
+定向验证：
+
+- `typecheck` 通过。
+- 4 个定向测试文件共 18 个测试通过，覆盖流式替换、虚拟窗口去重、提示词 tombstone、文件夹表单、提示词编辑删除和布局设置。
+- 完整验证通过：Prettier、ESLint（0 warnings）、TypeScript、100 个测试文件共 678 项、Chrome / Edge / Firefox build、VitePress docs build、`npm audit --omit=dev`（0 vulnerabilities）和 `git diff --check`。
+
+第二轮 Chrome 真机结果：
+
+- 新构建已显示内联文件夹、工作区导入/导出、提示词编辑删除和新版 Appearance。
+- 刷新后的时间轴是 10 条唯一消息；发送 `Voyager 实时回归 1247` 后，不切换 Dock 页签即可实时出现第 11 条用户消息和第 12 条最终回复，最终 12 个 heading 全部唯一，没有残留流式片段。
+- 星标按钮成功切换为 `Unstar` 且 `aria-pressed=true`，随后还原。
+- 临时提示词完成新增、编辑、删除，最终为空。
+- 临时根目录和子目录完成创建、归档、高亮、移出和删除，最终为空；自动化鼠标拖动没有生成 HTML5 `dataTransfer`，因此拖放仍需要人工鼠标确认。
+- Dock 左右位置、暗色主题与 M365 输入区折叠真机生效，测试后恢复 `right/system/未折叠`。
+- 工作区导出显示 `Workspace export started`；浏览器自动化禁止向文件选择器注入本地 fixture，UI 导入仍待人工点选验证。
 
 ## 文档定位
 

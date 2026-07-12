@@ -12,6 +12,7 @@ describe('V2 schemas', () => {
   it('creates complete default settings', () => {
     const settings = createDefaultSettingsV2();
     expect(SettingsV2Schema.parse(settings).platforms.m365.chatWidthPercent).toBe(75);
+    expect(SettingsV2Schema.parse(settings).platforms.m365.dockPosition).toBe('right');
   });
 
   it('rejects executable conversation URLs', () => {

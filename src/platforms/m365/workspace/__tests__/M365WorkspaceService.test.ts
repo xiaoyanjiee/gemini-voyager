@@ -51,4 +51,39 @@ describe('M365WorkspaceService', () => {
     expect(workspace.folders[0].deletedAt).not.toBeNull();
     expect(workspace.conversations[0].folderId).toBeNull();
   });
+
+  it('updates and tombstones prompts without leaking across accounts', async () => {
+    const service = new M365WorkspaceService(repository);
+    const prompt = await service.savePrompt('m365:a', {
+      title: 'Draft',
+      text: 'First',
+      tags: ['one'],
+    });
+    await service.savePrompt('m365:a', {
+      id: prompt.id,
+      title: 'Updated',
+      text: 'Second',
+      tags: ['two'],
+    });
+    await service.deletePrompt('m365:a', prompt.id);
+
+    expect((await service.view('m365:a')).prompts).toHaveLength(0);
+    expect(workspace.prompts[0]).toMatchObject({ title: 'Updated', deletedAt: expect.any(Number) });
+  });
+
+  it('validates imports and rebinds records to the active account', async () => {
+    const service = new M365WorkspaceService(repository);
+    const prompt = await service.savePrompt('m365:source', {
+      title: 'Imported',
+      text: 'Safe text',
+      tags: ['safe'],
+    });
+    const serialized = await service.exportWorkspace('m365:source');
+    await service.importWorkspace('m365:target', serialized);
+
+    expect((await service.view('m365:target')).prompts).toEqual([
+      expect.objectContaining({ id: prompt.id, accountScope: 'm365:target' }),
+    ]);
+    await expect(service.importWorkspace('m365:target', '{')).rejects.toThrow('not valid JSON');
+  });
 });

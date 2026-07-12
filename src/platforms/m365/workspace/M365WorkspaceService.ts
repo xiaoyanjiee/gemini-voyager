@@ -1,12 +1,28 @@
+import { z } from 'zod';
+
 import type { WorkspaceV2Repository } from '@/core/v2/repositories';
 import { workspaceV2Repository } from '@/core/v2/repositories';
-import type {
-  ConversationRecord,
-  FolderRecord,
-  PromptRecord,
-  StarredRecord,
-  WorkspaceV2,
+import {
+  type ConversationRecord,
+  ConversationRecordSchema,
+  type FolderRecord,
+  FolderRecordSchema,
+  type PromptRecord,
+  PromptRecordSchema,
+  type StarredRecord,
+  StarredRecordSchema,
+  type WorkspaceV2,
 } from '@/core/v2/schemas';
+
+const MAX_WORKSPACE_IMPORT_LENGTH = 5_000_000;
+const M365WorkspaceImportSchema = z.object({
+  schemaVersion: z.literal(2),
+  accountScope: z.string().min(1).max(500),
+  folders: z.array(FolderRecordSchema).max(10_000),
+  conversations: z.array(ConversationRecordSchema).max(50_000),
+  prompts: z.array(PromptRecordSchema).max(10_000),
+  starred: z.array(StarredRecordSchema).max(50_000),
+});
 
 export interface M365WorkspaceView {
   folders: FolderRecord[];
@@ -185,6 +201,22 @@ export class M365WorkspaceService {
     return saved;
   }
 
+  async deletePrompt(accountScope: string, promptId: string): Promise<void> {
+    await this.repository.update((workspace) => {
+      const prompt = workspace.prompts.find(
+        (candidate) =>
+          candidate.id === promptId &&
+          candidate.accountScope === accountScope &&
+          candidate.deletedAt === null,
+      );
+      if (!prompt) throw new Error('Prompt does not exist');
+      const now = Date.now();
+      prompt.deletedAt = now;
+      prompt.updatedAt = now;
+      return workspace;
+    });
+  }
+
   async toggleStar(
     accountScope: string,
     conversationId: string,
@@ -231,6 +263,65 @@ export class M365WorkspaceService {
   async exportWorkspace(accountScope: string): Promise<string> {
     const view = await this.view(accountScope);
     return JSON.stringify({ schemaVersion: 2, accountScope, ...view }, null, 2);
+  }
+
+  async importWorkspace(accountScope: string, serialized: string): Promise<void> {
+    if (serialized.length > MAX_WORKSPACE_IMPORT_LENGTH) {
+      throw new Error('Workspace import exceeds the 5 MB limit');
+    }
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(serialized) as unknown;
+    } catch {
+      throw new Error('Workspace import is not valid JSON');
+    }
+    const imported = M365WorkspaceImportSchema.parse(parsedJson);
+    this.assertTwoLevelImport(imported.folders);
+
+    await this.repository.update((workspace) => {
+      const now = Date.now();
+      const upsert = <T extends { id: string; accountScope: string; updatedAt: number }>(
+        target: T[],
+        records: T[],
+      ) => {
+        for (const record of records) {
+          const normalized = { ...record, accountScope, updatedAt: now, deletedAt: null } as T;
+          const existingIndex = target.findIndex(
+            (candidate) =>
+              candidate.id === normalized.id && candidate.accountScope === accountScope,
+          );
+          if (existingIndex >= 0) target[existingIndex] = normalized;
+          else target.push(normalized);
+        }
+      };
+      upsert(
+        workspace.folders,
+        imported.folders.map((folder) => ({ ...folder, platform: 'm365' as const })),
+      );
+      upsert(
+        workspace.conversations,
+        imported.conversations.map((conversation) => ({
+          ...conversation,
+          platform: 'm365' as const,
+        })),
+      );
+      upsert(workspace.prompts, imported.prompts);
+      upsert(
+        workspace.starred,
+        imported.starred.map((record) => ({ ...record, platform: 'm365' as const })),
+      );
+      return workspace;
+    });
+  }
+
+  private assertTwoLevelImport(folders: FolderRecord[]): void {
+    const byId = new Map(folders.map((folder) => [folder.id, folder]));
+    for (const folder of folders) {
+      if (!folder.parentId) continue;
+      const parent = byId.get(folder.parentId);
+      if (!parent) throw new Error('Imported subfolder has no parent');
+      if (parent.parentId !== null) throw new Error('Folders support at most two levels');
+    }
   }
 
   private assertFolder(workspace: WorkspaceV2, accountScope: string, folderId: string): void {
