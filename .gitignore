@@ -57,6 +57,7 @@ scripts/chrome-profile/
 
 # Local agent outputs
 .agent/
+.agents/skills/safari-release/SKILL.md
 docs/plans/
 output/
 src/pages/content/printBridge/

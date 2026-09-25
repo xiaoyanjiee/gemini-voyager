@@ -6,6 +6,25 @@
 
 后续 Codex 会话开始修改 M365 相关代码前，必须先阅读本文件和 `M365_COPILOT_CONTEXT.md`。任何改变 M365 selectors、canonical model、extractor 输出、export adapter、安全策略、浏览器验证流程或迁移优先级的任务，都必须同时更新这两个文档。
 
+## 2026-09-25 长对话 Timeline 空白与导出失效修复
+
+问题：用户反馈打开历史长对话后 Timeline 不显示任何消息，Export 点击无反应。
+
+根因：`CanonicalConversationBuilder.createFingerprint` 把整条消息正文拼进 fingerprint（`role + 全文 + imageKeys`），而 `SnapshotMessageSchema` 限制 `fingerprint` 最长 500 字符。长对话中 assistant 回复通常超过 500 字符，`ConversationSession.merge()` 内 `parseConversationSnapshot` 抛 ZodError，被 `VoyagerDock.refresh()` 捕获后仅记 debug 日志，`this.snapshot` 保持为 `null`。后果是 Timeline 渲染空列表、Export 因 `if (!this.snapshot) return` 静默返回。短对话 fingerprint 不超 500，所以此前真机回归未暴露。
+
+修复：
+
+- `createFingerprint` 改为定长哈希 `role:textLength:hash(text):hash(imageKeys)`（约 32 字符），去重与会话合并只依赖相等性，语义不变。
+- `snapshotAdapter` 增加同类上限保护：title 截断到 500（`document.title` 在长首条 prompt 会话上可能超长）、code block language 截断到 80、`safeUrl` 拒绝超过 4096 的 URL，防止其他字段再触发整段 snapshot 校验失败。
+
+验证：
+
+- 新增 `src/pages/content/m365CanonicalConversation.test.ts`：10 万字符消息走完整 `build → capture → parseConversationSnapshot` 链路不抛错，相邻相同长消息仍去重。
+- M365 定向测试 9 文件 35 项通过；`typecheck`、ESLint、Prettier、`build:chrome` 均通过。
+- Edge 真机（专用 profile + CDP）在用户真实长对话 `7b197609-…`（多轮物理试卷讨论，含 500+ 字符回复、表格）验证：Timeline 正常渲染，向上滚动经虚拟窗口合并累积到 14 条且序号唯一无重复；JSON 导出（`count=10`，`gemini-voyager.chat.v1`）与 Markdown 导出均生成正确文件。
+
+已知限制（非本次回归）：长对话的导出内容是"滚动浏览过程中已渲染过的消息"的累积集合——刚打开页面未滚动时只覆盖当前虚拟窗口（本次为 10 条），滚动越多合并越全。这与 V2 虚拟窗口设计一致。
+
 ## 2026-09-25 Edge 真机回归（无代码变更）
 
 本轮目标：在真实 Edge 环境对当前 `m365-probe` 分支做 M365 全功能回归，不改代码。

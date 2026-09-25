@@ -208,7 +208,7 @@ Fallback 识别：
 
 - 空 text-only message 会被丢弃，除非它包含有效图片。
 - 相邻重复 logical messages 会按 fingerprint 去重。
-- Fingerprint 格式是 `role + normalized lowercase text + image keys`。
+- Fingerprint 格式是 `role:textLength:hash(normalized lowercase text):hash(image keys)`（定长哈希，必须 ≤500 字符以满足 `SnapshotMessageSchema`；旧版本曾拼接全文，长消息会超限导致整段 snapshot 校验失败）。
 - Message id 格式是 `m365:<index>:<fingerprintHash>`。
 - 这些 id 对同一个已渲染页面状态的重复提取保持稳定，但不是跨会话、跨编辑的永久数据库 id。
 

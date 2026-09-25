@@ -19,7 +19,8 @@ function safeUrl(value: string | null): string | null {
   if (!value) return null;
   try {
     const url = new URL(value, location.href);
-    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return url.href.length <= 4096 ? url.href : null;
   } catch {
     return null;
   }
@@ -39,7 +40,10 @@ function extractStructuredBlocks(message: CanonicalMessage): MessageBlock[] {
 
   for (const code of message.contentElement.querySelectorAll('pre')) {
     const languageClass =
-      code.querySelector('code')?.className.match(/language-([\w-]+)/)?.[1] ?? '';
+      code
+        .querySelector('code')
+        ?.className.match(/language-([\w-]+)/)?.[1]
+        ?.slice(0, 80) ?? '';
     blocks.push({ type: 'code', language: languageClass, text: code.textContent ?? '' });
   }
 
@@ -106,7 +110,7 @@ export function captureM365Conversation(
       platform: 'm365',
       conversationId: conversationIdFromUrl(conversation.url),
       accountScope: options.accountScope ?? 'm365:unknown',
-      title: options.title ?? document.title,
+      title: (options.title ?? document.title).slice(0, 500),
       url: conversation.url,
       capturedAt,
       messages,

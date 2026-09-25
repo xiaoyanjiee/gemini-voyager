@@ -81,8 +81,9 @@ export class CanonicalConversationBuilder {
     text: string,
     images: M365ImageContent[],
   ): string {
+    const normalized = this.normalizeWhitespace(text).toLowerCase();
     const imageKeys = images.map((item) => item.currentSrc || item.src || item.alt).join('|');
-    return `${role}\n${this.normalizeWhitespace(text).toLowerCase()}\n${imageKeys}`;
+    return `${role}:${normalized.length}:${this.hashString(normalized)}:${this.hashString(imageKeys)}`;
   }
 
   private static dedupeAdjacentMessages(messages: CanonicalMessage[]): CanonicalMessage[] {
