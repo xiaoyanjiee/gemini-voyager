@@ -1,10 +1,38 @@
 # M365 Copilot 变更与进度文档
 
-最后更新：2026-07-12
-当前状态：Voyager V2 M365 Dock 首轮真机问题已修复，并通过自动测试、跨浏览器构建与第二轮 Chrome 真机回归
+最后更新：2026-09-25
+当前状态：Voyager V2 M365 Dock 已通过 Edge 真机回归（专用测试 profile + CDP 自动化）
 配套上下文：`M365_COPILOT_CONTEXT.md`
 
 后续 Codex 会话开始修改 M365 相关代码前，必须先阅读本文件和 `M365_COPILOT_CONTEXT.md`。任何改变 M365 selectors、canonical model、extractor 输出、export adapter、安全策略、浏览器验证流程或迁移优先级的任务，都必须同时更新这两个文档。
+
+## 2026-09-25 Edge 真机回归（无代码变更）
+
+本轮目标：在真实 Edge 环境对当前 `m365-probe` 分支做 M365 全功能回归，不改代码。
+
+环境与方法：
+
+- `npm.cmd run test -- src/pages/content/m365ChatWidth.test.ts src/pages/popup/__tests__/m365Settings.test.tsx src/platforms/m365`：8 个文件 33 项测试通过；`typecheck` 通过；`build:chrome` 通过（17.8s）。
+- 启动 Edge 153 + 专用 profile `%TEMP%\gemini-voyager-m365-profile`，`--remote-debugging-port=9225`，`--load-extension=L:\My project\project\dist_chrome`；登录态由 Windows SSO 账户自动完成（帐户选择页自动跳过）。
+- 自动化驱动：Windows 侧 Node 24 直连 CDP（`Runtime.evaluate` + `Input.dispatch*` + `Page.captureScreenshot`），M365 功能验证都在 `Voyager` isolated world 执行。
+
+验证结果：
+
+- 注入与 UI：`#gv-m365-voyager-dock` 单实例、`#gv-m365-chat-width-style` 单实例、html `gv-m365-chat-width-enabled`、input-collapse style 注入；Dock launcher/panel 正常开合，5 个页签齐全。
+- Timeline：发送无敏感 prompt 后，不切换页签即实时出现 `1. user` / `2. assistant`；浏览器重启重开对话页后仍 2 条唯一消息，无流式片段残留、无重复编号。
+- 消息操作：Star→Unstar 切换与 `aria-pressed` 正确，Copy text 成功，Quote 以 `>` 前缀插入 M365 contenteditable 编辑器。
+- 导出：JSON（`gemini-voyager.chat.v1`，含 user/assistant turn）、Markdown（`# 标题`、`## Turn 1` 结构）、IMAGE（PNG 下载）均成功；勾选单条消息后导出 JSON `count=1` 正确反映选择集。PDF 走 `window.print()`：print container/`gv-pdf-printing`/`gv-pdf-print-styles` 均注入确认，原生打印对话框未自动确认属正常。
+- Organize：根文件夹、子文件夹创建成功；"File chat" 归档当前会话并高亮；删除文件夹级联清理子文件夹且会话 folderId 置空；"No folders yet" 空态恢复；workspace 导出 `voyager-m365-workspace-v2.json` 结构合法。
+- Prompts：新增（title/tags/text）、Insert 写入 M365 编辑器、Edit 改名、Delete tombstone 删除均生效，最终空态。
+- Appearance：宽度滑杆实时写 `chatWidthPercent` 并更新 CSS 至 `88vw`；dockPosition `left`/`right` 切换移动 launcher/panel；`theme: dark` 面板转暗色；输入区折叠后 M365 editor 计算样式 `max-height: 0`。全部恢复默认（right/system/未折叠/75vw）。
+- Popup：后台重载 `src/pages/popup/index.html`（保持 m365 tab 为活动 tab）后渲染 `M365ControlCenter` 中文界面，概览指标与 7 个区块均正常；真实工具栏弹窗视觉仍建议人工点开确认。
+- Console 采样 12s：仅 M365 原生 preload warning、`unload` permissions policy violation 和一处 404，无 Voyager 相关异常。
+
+观察项（非阻塞）：
+
+- `accountScope` 在本账号页面解析为 `m365:unknown`（`resolveM365AccountScope` 的头像 hint selectors 未命中），workspace 数据归入 unknown scope；不影响功能正确性，但多账号区分未覆盖。
+- 历史真机流程中的 `window.__gvDiagRun` / `__gvExtract*` / `__gvExportM365*` helpers 在 V2 已不存在（diagnostics 仅 dev 模式注册）；文档"Windows 本地浏览器验证流程"章节仍引用这些旧入口，后续如有需要应以 `Voyager` world 内的 Dock/会话能力为准。
+- 测试 Edge 窗口被用户手动关闭过一次；重新用同一 profile 启动即恢复，登录态保留。
 
 ## 2026-07-12 Voyager V2 首轮真机修复
 

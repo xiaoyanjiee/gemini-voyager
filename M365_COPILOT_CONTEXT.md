@@ -1,11 +1,22 @@
 # M365 Copilot 迁移架构基线
 
-最后更新：2026-07-12
-状态：Voyager V2 M365 Dock 会话稳定性与管理界面修复已通过第二轮 Chrome 真机回归
+最后更新：2026-09-25
+状态：Voyager V2 M365 Dock 已通过 Edge 真机回归（WSL/CDP 自动化驱动）
 目标站点：`https://m365.cloud.microsoft/*`
 
 这是后续 Codex 会话的交接文档。修改 M365 专用代码前，必须先阅读本文件。
 桌面上的历史 `PLAN.md` / `PLAN2.md` 以及 M365 export adapter 计划已吸收到本文档；新会话不需要再导入这三份 plan。
+
+## 2026-09-25 Edge 真机回归快照
+
+- 本轮在 Edge 153 上用专用测试 profile `%TEMP%\gemini-voyager-m365-profile` + CDP `9225` 完成回归；Node 驱动脚本在 Windows 侧运行，目标 context 仍为 `Voyager` isolated world。
+- 测试会话：`https://m365.cloud.microsoft/chat/conversation/b66830b3-7329-41f5-b4d1-9dcd13df7b11`，发送一条无敏感回归 prompt 后验证。
+- 已通过：`#gv-m365-voyager-dock` Shadow DOM launcher/panel、Timeline 5 个页签（Timeline/Organize/Prompts/Export/Appearance）、消息列表实时更新为 `1. user` / `2. assistant` 两条唯一消息、Star/Unstar 与 `aria-pressed`、Quote 插入 M365 编辑器、Copy text、JSON / Markdown / Image / PDF 四种导出（PDF 走 `window.print()` 路径，print container/styles 注入确认）、选中导出、文件夹创建/归档/子文件夹/删除级联、提示词新增/插入/编辑/删除、Appearance 宽度滑杆（75↔88vw）、Dock 左右位置、dark 主题、输入区折叠、Organize 的 workspace 导出。
+- 刷新与浏览器重启后时间轴仍为 2 条唯一消息，无重复、无流式片段残留。
+- Console 采样只有 M365 原生 preload / unload permissions policy violation / 404，无 Voyager 异常。
+- 已知观察：`accountScope` 在该页面解析为 `m365:unknown`（头像 hint selector 未命中）；workspace JSON 导出结构与两级目录限制正常。
+- Popup `M365ControlCenter` 通过"后台 tab reload"方式验证：激活 m365 tab 后在后台重载 `chrome-extension://.../src/pages/popup/index.html`，渲染出中文控制中心全部 7 个区块；真实工具栏 popup 视觉仍建议人工点开确认。
+- 测试数据已全部清理（文件夹/提示词/星标删除，编辑器草稿清空）；浏览器被用户误关一次后 profile 重开即可继续，登录态保留。
 
 ## 2026-07-12 V2 真机修复快照
 
